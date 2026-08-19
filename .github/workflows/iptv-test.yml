@@ -1,0 +1,36 @@
+name: IPTV Test
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # каждые 10 минут
+  workflow_dispatch:          # ручной запуск
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests m3u8
+
+      - name: Run IPTV tester
+        run: |
+          python iptv_tester.py \
+            --playlist "${{ secrets.PLAYLIST_URL }}" \
+            --channels "Матч,Setanta,Sky" \
+            --interval 0 \
+            --max-checks 1 \
+            --output results.csv
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: iptv-results
+          path: results.csv
