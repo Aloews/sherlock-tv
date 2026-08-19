@@ -24,7 +24,7 @@ jobs:
         run: |
           python iptv_tester.py \
             --playlist "${{ secrets.PLAYLIST_URL }}" \
-            --channels "Матч,Setanta,Sky" \
+            --channels "Матч,Setanta,Viasat,Sky Sport,DAZN,Eleven,Channel + Sport,Беларусь 5,BBC,ITV,BT Sport,SuperSport,Premier Sports,Racing TV,Box Nation,Tennis Channel,NBA,NFL,FOX,ESPN,NHL,UFC,beIN,КХЛ,Футбол" \
             --interval 0 \
             --max-checks 1 \
             --output results.csv
