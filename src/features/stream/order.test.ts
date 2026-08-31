@@ -10,9 +10,15 @@ describe('orderChannels', () => {
     expect(out.map((c) => c.name)).toEqual(['Setanta Sports 1 HD', 'Divi Sport']);
   });
 
+  // ⚠️ ОЖИДАНИЕ ЗДЕСЬ МЕНЯЕТСЯ ВМЕСТЕ С PINNED, И ТАК И ЗАДУМАНО. Раньше тут
+  // стояло ['Setanta Sports 2 HD', 'Viasat Sport', 'EUROSPORT 1'] — до того,
+  // как владелец прислал свой список и `eurosport` переехал с конца на четвёртую
+  // строку. Сверять с pinRank вместо имён было бы тавтологией: проверка прошла
+  // бы при любом порядке. Смысл именно в том, чтобы СЛУЧАЙНАЯ перестановка
+  // списка ловилась, а намеренная требовала правки здесь.
   it('keeps pinned channels in the order PINNED declares, not playlist order', () => {
-    const out = orderChannels([ch('EUROSPORT 1'), ch('Viasat Sport'), ch('Setanta Sports 2 HD')]);
-    expect(out.map((c) => c.name)).toEqual(['Setanta Sports 2 HD', 'Viasat Sport', 'EUROSPORT 1']);
+    const out = orderChannels([ch('Viasat Sport'), ch('Setanta Sports 2 HD'), ch('EUROSPORT 1')]);
+    expect(out.map((c) => c.name)).toEqual(['EUROSPORT 1', 'Setanta Sports 2 HD', 'Viasat Sport']);
   });
 
   // Устойчивость — не деталь: без неё незакреплённые тасовались бы на каждой
@@ -233,5 +239,39 @@ describe('filterChannels', () => {
   it('сохраняет порядок входного списка', () => {
     expect(filterChannels(list, 's', false).map((c) => c.name))
       .toEqual(['Setanta Sports 1 HD', 'Divi Sport']);
+  });
+});
+
+// ── Канал по умолчанию ───────────────────────────────────────
+//
+// Владелец попросил, чтобы «Real Madrid» игрался сразу при открытии. Канал
+// измерен 31.08.2026: 311 КБ видео, CORS `*`. Он стоит первой строкой PINNED,
+// и эта позиция — единственное место, где сказано «главный».
+describe('канал по умолчанию', () => {
+  const RM = ch('Real Madrid', 'https://rm.test/1.m3u8');
+  const OTHER = ch('Матч ТВ', 'https://match.test/1.m3u8');
+
+  it('играет первым на чистом устройстве', () => {
+    expect(orderChannels([OTHER, RM])[0].name).toBe('Real Madrid');
+  });
+
+  // ⚠️ ГЛАВНОЕ. Без обхода здоровья он играл бы только на ПЕРВОМ заходе: у
+  // вернувшегося зрителя уже смотренный канал лежит в лучшем ведре.
+  it('остаётся первым, даже если зритель уже смотрел другой канал', () => {
+    const health = { [OTHER.url]: 'played' as const };
+    expect(orderChannels([OTHER, RM], health)[0].name).toBe('Real Madrid');
+  });
+
+  // ⚠️ И ОБРАТНАЯ СТОРОНА, без которой это была бы та же ошибка, что стоила
+  // трёх отказов подряд: мёртвый первый ломает экран.
+  it('уходит вниз, если отказал сам', () => {
+    const health = { [RM.url]: 'failed' as const, [OTHER.url]: 'played' as const };
+    expect(orderChannels([RM, OTHER], health)[0].name).toBe('Матч ТВ');
+  });
+
+  // Избранное остаётся выше всего: это прямое указание зрителя, а канал по
+  // умолчанию — решение владельца за него.
+  it('уступает избранному зрителя', () => {
+    expect(orderChannels([RM, OTHER], {}, [OTHER.url])[0].name).toBe('Матч ТВ');
   });
 });
