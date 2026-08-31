@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseM3u, isPlayable, isSport, isShown, sportChannels, catalogue, groupCounts,
+  parseM3u, isPlayable, isSport, isShown, isPinned, pinRank,
+  sportChannels, catalogue, groupCounts,
   type Channel,
 } from './playlist';
 
@@ -270,5 +271,53 @@ describe('groupCounts', () => {
     expect(rows[0]).toMatchObject({ group: 'SPORT 🏆', total: 3, shown: 2 });
     // Запись без group-title не теряется — у неё своя строка.
     expect(rows.some((r) => r.group === '—')).toBe(true);
+  });
+});
+
+// ── Список владельца ─────────────────────────────────────────
+//
+// Имена взяты со скриншота 31.08.2026: девять каналов, которые владелец
+// назвал сам. Проверка на то, что КАЖДЫЙ из них ловится списком PINNED, —
+// иначе строка в нём есть, а канал в приложение не попадает, и заметить это
+// нечем: экран выглядит исправным, просто короче.
+describe('PINNED ловит каждый канал из списка владельца', () => {
+  const WANTED = [
+    'Матч ТВ', 'Матч! Футбол 1', 'Матч! Футбол 2', 'Матч! Футбол 3',
+    'Матч Премьер', 'Setanta Sports UA', 'Setanta Sports+',
+    'Maincast sport', 'Беларусь 5',
+  ];
+
+  it.each(WANTED)('%s закреплён', (name) => {
+    expect(isPinned({ name, group: 'что угодно', logo: null, url: 'https://x/y.m3u8' }))
+      .toBe(true);
+  });
+
+  // ⚠️ И РАБОЧАЯ РОДНЯ «Матч ТВ» С ТОЙ ЖЕ РАЗДАЧИ. Группа у них неспортивная
+  // (`Оргтехсервис 🎯VPN`), так что мимо PINNED они не проходят вовсе.
+  it.each(['Матч! Арена', 'Матч! Игра', 'Матч! Страна', 'Матч! Планета'])(
+    '%s закреплён — иначе неспортивная группа его отсечёт',
+    (name) => {
+      expect(isShown({ name, group: 'Оргтехсервис 🎯VPN', logo: null,
+                       url: 'https://flussonic.mkpnet.ru/tv-x/video.m3u8' })).toBe(true);
+    },
+  );
+
+  // ⚠️ ЗАКРЕПЛЕНИЕ НЕ ОТМЕНЯЕТ https. «Матч! Футбол 1» в каталоге есть только
+  // по http, и показывать его нельзя — браузер режет смешанное содержимое.
+  // Строка в PINNED для него это «покажем, когда сможем», а не «покажем».
+  it('does not smuggle an http channel in just because it is pinned', () => {
+    expect(isShown({ name: 'Матч! Футбол 1', group: 'TEST-1', logo: null,
+                     url: 'http://37.230.164.98:8080/matchfootball1/index.m3u8' })).toBe(false);
+  });
+
+  // Порядок внутри PINNED — это порядок на экране. «Матч ТВ» владелец
+  // поставил первым, и он же единственный из списка с двумя рабочими
+  // источниками; проверяем, что он и правда впереди остальных названных.
+  it('puts Матч ТВ ahead of the rest of the owner list', () => {
+    const rank = (name: string) =>
+      pinRank({ name, group: '', logo: null, url: 'https://x/y.m3u8' });
+    for (const other of ['Матч! Футбол 1', 'Матч Премьер', 'Setanta Sports UA', 'Беларусь 5']) {
+      expect(rank('Матч ТВ')).toBeLessThan(rank(other));
+    }
   });
 });
