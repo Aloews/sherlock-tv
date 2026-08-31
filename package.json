@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:i18n": "node scripts/check-i18n.mjs"
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:prod": "node scripts/check-prod.mjs",
+    "check:limits": "node scripts/check-limits.mjs",
+    "check:tests": "node scripts/check-tests.mjs"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
