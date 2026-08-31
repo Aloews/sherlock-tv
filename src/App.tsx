@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconFlag, IconStar, IconStarFilled, IconSearch, IconDeviceTv } from '@tabler/icons-react';
+import { IconFlag, IconStar, IconStarFilled, IconSearch } from '@tabler/icons-react';
 import { hapticImpact, initTelegram } from '@/shared/lib/telegram';
 import { OptionRow } from '@/shared/ui/OptionRow';
 import { Chip } from '@/shared/ui/Chip';
@@ -14,6 +14,7 @@ import { buildReportMailto } from '@/features/stream/reportMailto';
 import { ChannelsPanel } from '@/features/stream/ChannelsPanel';
 import { showCatalogue } from '@/features/stream/config';
 import { LangPicker } from '@/shared/ui/LangPicker';
+import { Logo, APP_NAME } from '@/shared/ui/Logo';
 
 // Адрес КАТАЛОГА каналов, а не потока. Публичен по природе: браузеру всё равно
 // надо знать, откуда его брать. Разбор — features/stream/playlist.ts.
@@ -59,7 +60,9 @@ export function App() {
   // Заголовок вкладки — на языке экрана. В index.html он зашит по-русски как
   // запасной (его видно до загрузки скрипта), но оставлять его над английским
   // или арабским экраном значит показывать чужой язык в самом заметном месте.
-  useEffect(() => { document.title = t('stream.title'); }, [t]);
+  // Вкладка — именем приложения, а не описанием: в ряду из двадцати вкладок
+  // человек ищет бренд, а «Прямой эфир» там неотличим от чего угодно.
+  useEffect(() => { document.title = APP_NAME; }, []);
 
   const raw = channels.status === 'ok' ? channels.data : [];
   // Порядок считается ОДИН раз по всему списку, отбор — поверх него. Обратный
@@ -100,9 +103,17 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-brand-bg ds-screen flex flex-col">
-      <div className="flex items-center gap-3 px-4 py-4">
-        <IconDeviceTv size={22} stroke={2} className="text-brand-accent shrink-0" />
-        <h1 className="ds-display text-white text-xl font-black flex-1">{t('stream.title')}</h1>
+      <div className="flex items-center gap-2.5 px-4 py-4">
+        <Logo size={26} className="text-brand-accent shrink-0" />
+        <div className="flex-1 min-w-0">
+          <h1 className="ds-display text-white text-xl font-black leading-none">{APP_NAME}</h1>
+          {/* Имя — собственное и не переводится; подпись под ним переведена и
+              объясняет, что это. Без неё бренд ничего не говорит тому, кто
+              видит приложение впервые. */}
+          <p className="text-brand-muted text-[10.5px] leading-none mt-1 truncate">
+            {t('stream.title')}
+          </p>
+        </div>
         <LangPicker />
       </div>
 

@@ -128,7 +128,7 @@ describe('кэш списка каналов', () => {
   // эти два теста честно упали: `readCache` отбрасывает чужую версию, и
   // фикстура с `v: 1` перестала читаться. Ровно то поведение, ради которого
   // версия и заведена, — поэтому здесь стоит константа, а не число.
-  const put = () => localStorage.setItem('ss_tv_channels', JSON.stringify({
+  const put = () => localStorage.setItem('ml_tv_channels', JSON.stringify({
     v: CACHE_VERSION, at: Date.now(), src: 'https://relay/playlist.m3u8', channels: CACHED,
   }));
 
@@ -170,7 +170,7 @@ describe('кэш списка каналов', () => {
     render(<Harness url="https://relay/playlist.m3u8" />);
     await settle();
 
-    const raw = localStorage.getItem('ss_tv_channels');
+    const raw = localStorage.getItem('ml_tv_channels');
     expect(raw).toBeTruthy();
     expect(JSON.parse(raw!).channels.map((c: { name: string }) => c.name)).toEqual(['Red Bull TV']);
   });

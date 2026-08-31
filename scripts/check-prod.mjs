@@ -219,7 +219,7 @@ async function checkBundle() {
     const has = (s) => js.includes(s);
     const controlWorks = !has('заведомо-отсутствующая-строка-контроля');
 
-    record('Прод: кэш каталога выкачен', has('ss_tv_channels'), main,
+    record('Прод: кэш каталога выкачен', has('ml_tv_channels'), main,
            controlWorks ? 'контроль не нашёл несуществующее' : '⚠ КОНТРОЛЬ НАШЁЛ ЧУШЬ');
 
     // ⚠️ И ГЛАВНОЕ: КАТАЛОГА В ПУБЛИЧНОЙ СБОРКЕ БЫТЬ НЕ ДОЛЖНО. За флагом
