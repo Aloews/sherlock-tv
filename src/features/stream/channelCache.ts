@@ -66,8 +66,19 @@ function migrateLegacy(): void {
  * старая запись тогда отбрасывается, а не читается как своя. Без этого правка
  * фильтров показывала бы вчерашний список тем, у кого он уже лежит.
  */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 const VERSION = CACHE_VERSION;
+
+/**
+ * Версия записи ЗДОРОВЬЯ — своя, отдельная от версии списка.
+ *
+ * ⚠️ РАНЬШЕ БЫЛ ОДИН НОМЕР НА ДВА РАЗНЫХ ХРАНИЛИЩА, и это выяснилось ровно
+ * тогда, когда у записи списка появилось поле `scope`: бампнув версию списка,
+ * я заодно выбросил бы всем замеренное здоровье каналов, у которого форма не
+ * менялась вовсе. Здоровье — то, что приложение УЗНАЛО, проверяя каналы
+ * по одному; выбрасывать его за компанию с чужой правкой нельзя.
+ */
+const HEALTH_VERSION = 2;
 
 /** Сколько живёт запись. Сутки: каталог правят руками и не каждый день. */
 export const TTL_MS = 24 * 60 * 60 * 1000;
@@ -78,6 +89,16 @@ interface Entry {
   at: number;
   /** Адрес каталога: сменился `VITE_STREAM_URL` — старый список чужой. */
   src: string;
+  /**
+   * Режим отбора, которым список получен.
+   *
+   * ⚠️ БЕЗ ЭТОГО ПОЛЯ КЭШ ВРЁТ ПРИ СМЕНЕ РЕЖИМА. Здесь лежит РЕЗУЛЬТАТ
+   * отбора, а не сырой каталог (сам каталог — 870 КБ, это почти весь лимит
+   * localStorage). Значит список, снятый в режиме «спорт», в режиме «все
+   * каналы» — уже не ответ: зритель переключил бы на «все» и увидел те же
+   * тридцать две спортивные строки, пока не приедет сеть. Молча.
+   */
+  scope: string;
   channels: Channel[];
 }
 
@@ -98,13 +119,15 @@ function isChannel(x: unknown): x is Channel {
  *
  * `null` — «годного кэша нет», и это не ошибка: первый заход выглядит так же.
  */
-export function readCache(src: string, now = Date.now()): Channel[] | null {
+export function readCache(src: string, scope = 'sport', now = Date.now()): Channel[] | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const e = JSON.parse(raw) as Partial<Entry>;
     if (e.v !== VERSION) return null;
     if (e.src !== src) return null;
+    // Запись из другого режима — чужая: см. поле `scope` выше.
+    if ((e.scope ?? 'sport') !== scope) return null;
     if (typeof e.at !== 'number' || now - e.at > TTL_MS) return null;
     if (!Array.isArray(e.channels) || e.channels.length === 0) return null;
     if (!e.channels.every(isChannel)) return null;
@@ -123,10 +146,16 @@ export function readCache(src: string, now = Date.now()): Channel[] | null {
  * каталоге, и запомнить его на сутки значит на сутки показывать пустой экран
  * там, где сеть уже починилась.
  */
-export function writeCache(src: string, channels: Channel[], now = Date.now()): void {
+export function writeCache(
+  src: string, channels: Channel[], scope = 'sport', now = Date.now(),
+): void {
   if (channels.length === 0) return;
   try {
-    const entry: Entry = { v: VERSION, at: now, src, channels };
+    // ⚠️ В РЕЖИМЕ «ВСЕ КАНАЛЫ» ЭТО 2158 ЗАПИСЕЙ, а не тридцать две. Каждая —
+    // имя, группа и адрес; на боевом каталоге получается около 300 КБ, и в
+    // лимит localStorage (~5 МБ) это укладывается с запасом. Порог, при
+    // котором стоит вернуться к этому решению, — рост каталога на порядок.
+    const entry: Entry = { v: VERSION, at: now, src, scope, channels };
     localStorage.setItem(KEY, JSON.stringify(entry));
   } catch {
     // Квота или приватный режим. Кэш — ускорение, а не условие работы:
@@ -175,7 +204,7 @@ function readHealthRaw(now: number): Record<string, Health> {
     const raw = localStorage.getItem(HEALTH_KEY);
     if (!raw) return {};
     const e = JSON.parse(raw) as Partial<HealthEntry>;
-    if (e.v !== VERSION) return {};
+    if (e.v !== HEALTH_VERSION) return {};
     if (typeof e.at !== 'number' || now - e.at > HEALTH_TTL_MS) return {};
     if (!e.urls || typeof e.urls !== 'object') return {};
     const out: Record<string, Health> = {};
@@ -204,7 +233,7 @@ export function markHealth(url: string, health: Health, now = Date.now()): void 
   try {
     const urls = readHealthRaw(now);
     urls[url] = health;
-    const entry: HealthEntry = { v: VERSION, at: now, urls };
+    const entry: HealthEntry = { v: HEALTH_VERSION, at: now, urls };
     localStorage.setItem(HEALTH_KEY, JSON.stringify(entry));
   } catch {
     // см. writeCache — кэш это ускорение, а не условие работы

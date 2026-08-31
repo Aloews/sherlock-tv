@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseM3u, isPlayable, isSport, isShown, isPinned, pinRank,
-  sportChannels, catalogue, groupCounts,
+  sportChannels, channelsFor, catalogue, groupCounts,
   type Channel,
 } from './playlist';
 
@@ -319,5 +319,83 @@ describe('PINNED ловит каждый канал из списка владе
     for (const other of ['Матч! Футбол 1', 'Матч Премьер', 'Setanta Sports UA', 'Беларусь 5']) {
       expect(rank('Матч ТВ')).toBeLessThan(rank(other));
     }
+  });
+});
+
+// ── Режимы отбора ────────────────────────────────────────────
+//
+// Владелец попросил открыть весь каталог и выбирать самому. Отбор по
+// спортивным группам был ДОГАДКОЙ приложения о том, что ему нужно; фильтр по
+// https — не догадка, а измеренный факт (браузер режет смешанное содержимое).
+// Проверки ниже держат эту границу.
+describe('channelsFor', () => {
+  const CATALOGUE = [
+    '#EXTINF:-1 group-title="SPORT 🏆",Setanta Sports 1 HD',
+    'https://sport.test/1.m3u8',
+    '#EXTINF:-1 group-title="SPORT 🏆",Матч ТВ по http',
+    'http://sport.test/2.m3u8',
+    '#EXTINF:-1 group-title="KINO ZAL",Анаконда 2025',
+    'https://kino.test/film.m3u8',
+    '#EXTINF:-1 group-title="МУЗИКА 🎶",Music Box',
+    'https://music.test/1.m3u8',
+    '#EXTINF:-1 group-title="Германия 🇩🇪",Das Erste',
+    'http://de.test/1.m3u8',
+  ].join('\n');
+
+  it('sport: только спорт и только https — как было', () => {
+    expect(channelsFor(CATALOGUE, 'sport').map((c) => c.name))
+      .toEqual(['Setanta Sports 1 HD']);
+  });
+
+  it('all: весь каталог, но только то, что может открыться', () => {
+    expect(channelsFor(CATALOGUE, 'all').map((c) => c.name))
+      .toEqual(['Setanta Sports 1 HD', 'Анаконда 2025', 'Music Box']);
+  });
+
+  it('everything: плюс http, которые не откроются никогда', () => {
+    expect(channelsFor(CATALOGUE, 'everything').map((c) => c.name))
+      .toEqual(['Setanta Sports 1 HD', 'Матч ТВ по http', 'Анаконда 2025',
+                'Music Box', 'Das Erste']);
+  });
+
+  it('режимы вложены: sport ⊆ all ⊆ everything', () => {
+    const s = new Set(channelsFor(CATALOGUE, 'sport').map((c) => c.url));
+    const a = new Set(channelsFor(CATALOGUE, 'all').map((c) => c.url));
+    const e = new Set(channelsFor(CATALOGUE, 'everything').map((c) => c.url));
+    for (const u of s) expect(a.has(u), u).toBe(true);
+    for (const u of a) expect(e.has(u), u).toBe(true);
+  });
+});
+
+// ⚠️ САМАЯ ВАЖНАЯ ПРОВЕРКА В ЭТОМ ФАЙЛЕ. В боевом каталоге в группе `♥18+`
+// 126 записей, 71 из них по https — то есть они бы открылись. Граница не
+// зависит от выбранного режима, и «показать всё» её не снимает.
+describe('взрослая группа', () => {
+  const ADULT = [
+    '#EXTINF:-1 group-title="♥18+",Что-то взрослое',
+    'https://adult.test/1.m3u8',
+    '#EXTINF:-1 group-title="XXX HD",И ещё',
+    'https://adult.test/2.m3u8',
+    '#EXTINF:-1 group-title="SPORT 🏆",Setanta Sports 1 HD',
+    'https://sport.test/1.m3u8',
+  ].join('\n');
+
+  // ⚠️ В РЕЖИМЕ `sport` ЭТА ПРОВЕРКА СЛАБЕЕ ОСТАЛЬНЫХ ДВУХ, и это надо знать:
+  // взрослый канал там отсекается и без границы — просто потому, что его
+  // группа не спортивная. Снятие границы валит два случая из трёх, а не три
+  // (проверено). Работают здесь `all` и `everything`; строка про `sport`
+  // оставлена, чтобы режим не выпал из перебора, когда появится четвёртый.
+  it.each(['sport', 'all', 'everything'] as const)(
+    'не проходит в режиме %s',
+    (scope) => {
+      expect(channelsFor(ADULT, scope).map((c) => c.name)).toEqual(['Setanta Sports 1 HD']);
+    },
+  );
+
+  // Отрицательная сторона: флаг ДОЛЖЕН открывать её — иначе проверки выше
+  // проходили бы и на «выбросить всё подряд», ничего не доказывая.
+  it('открывается только явным флагом', () => {
+    expect(channelsFor(ADULT, 'all', true).map((c) => c.name))
+      .toEqual(['Что-то взрослое', 'И ещё', 'Setanta Sports 1 HD']);
   });
 });

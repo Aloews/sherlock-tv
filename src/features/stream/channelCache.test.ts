@@ -33,9 +33,9 @@ describe('channelCache', () => {
 
   it('expires after the TTL', () => {
     const t0 = 1_000_000;
-    writeCache(SRC, [ch('A')], t0);
-    expect(readCache(SRC, t0 + TTL_MS - 1)).not.toBeNull();
-    expect(readCache(SRC, t0 + TTL_MS + 1)).toBeNull();
+    writeCache(SRC, [ch('A')], 'sport', t0);
+    expect(readCache(SRC, 'sport', t0 + TTL_MS - 1)).not.toBeNull();
+    expect(readCache(SRC, 'sport', t0 + TTL_MS + 1)).toBeNull();
   });
 
   // Пустота — состояние сети, а не факт о каталоге. Запомнить её на сутки

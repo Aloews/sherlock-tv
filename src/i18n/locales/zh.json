@@ -17,6 +17,12 @@
     "favourites": "收藏",
     "favourite": "加入收藏",
     "unfavourite": "取消收藏",
-    "nothing_found": "没有找到"
+    "nothing_found": "没有找到",
+    "scope_sport": "体育",
+    "scope_all": "全部频道",
+    "scope_everything": "全部，含无法播放的",
+    "group_all": "全部分组 · {{n}}",
+    "blocked_http": "无法播放：http",
+    "show_more": "再显示 {{n}} 个"
   }
 }

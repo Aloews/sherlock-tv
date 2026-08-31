@@ -17,6 +17,12 @@
     "favourites": "즐겨찾기",
     "favourite": "즐겨찾기에 추가",
     "unfavourite": "즐겨찾기에서 제거",
-    "nothing_found": "검색 결과가 없습니다"
+    "nothing_found": "검색 결과가 없습니다",
+    "scope_sport": "스포츠",
+    "scope_all": "모든 채널",
+    "scope_everything": "재생 불가 포함 전체",
+    "group_all": "모든 그룹 · {{n}}",
+    "blocked_http": "재생 불가: http",
+    "show_more": "{{n}}개 더 보기"
   }
 }
