@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Палитра перенесена из sherlock-scholes- как есть: вся вёрстка плеера
+   написана на классах brand-*, и подменять значения «заодно с переездом»
+   значило бы менять вид там, где меняется только адрес. */
+@layer base {
+  :root {
+    --brand-bg:           10 14 26;    /* #0A0E1A */
+    --brand-surface:      19 24 42;    /* #13182A */
+    --brand-border:       31 39 64;    /* #1F2740 */
+    --brand-muted:       154 163 181;  /* #9AA3B5 */
+    --brand-accent:      255 138 61;   /* #FF8A3D */
+    --brand-accent-soft: 255 224 194;  /* #FFE0C2 */
+    --brand-accent-deep: 194 74 0;     /* #C24A00 */
+    --brand-highlight:   255 224 194;
+  }
+
+  body {
+    @apply bg-brand-bg text-white font-sans;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* `ds-*` в игре переключали оформление между двумя визуальными языками. Здесь
+   язык один, поэтому классы существуют, но ничего не делают — сохранены, чтобы
+   перенесённая вёрстка осталась ДОСЛОВНОЙ и её можно было сверять с оригиналом
+   построчно. Удалять их стоит одним отдельным заходом, а не в переезде. */
+.ds-screen { }
+.ds-panel  { }
+.ds-display { font-weight: 800; }
