@@ -17,6 +17,12 @@
     "favourites": "Favoris",
     "favourite": "Ajouter aux favoris",
     "unfavourite": "Retirer des favoris",
-    "nothing_found": "Aucun résultat"
+    "nothing_found": "Aucun résultat",
+    "scope_sport": "Sport",
+    "scope_all": "Toutes les chaînes",
+    "scope_everything": "Tout, y compris l’illisible",
+    "group_all": "Tous les groupes · {{n}}",
+    "blocked_http": "Ne s’ouvrira pas : http",
+    "show_more": "Afficher {{n}} de plus"
   }
 }

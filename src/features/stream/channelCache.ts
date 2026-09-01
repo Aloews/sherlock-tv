@@ -23,15 +23,62 @@
 
 import type { Channel } from './playlist';
 
-const KEY = 'ss_tv_channels';
+// ⚠️ ПРЕФИКС КЛЮЧЕЙ СМЕНИЛСЯ С `ss_` НА `ml_` ВМЕСТЕ С ИМЕНЕМ ПРИЛОЖЕНИЯ.
+// `ss_` осталось от sherlock-scholes-, откуда экран приехал, и в devtools
+// зрителя это единственное место, где чужое имя ещё было видно.
+const KEY = 'ml_tv_channels';
+
+// Прежние имена — только чтобы забрать из них избранное и убрать за собой.
+const LEGACY = {
+  channels:   'ss_tv_channels',
+  health:     'ss_tv_health',
+  favourites: 'ss_tv_favourites',
+} as const;
+
+/**
+ * Перенести избранное со старого ключа и убрать старые за собой.
+ *
+ * ⚠️ КЭШ И ЗДОРОВЬЕ НЕ ПЕРЕНОСЯТСЯ, А ИЗБРАННОЕ — ПЕРЕНОСИТСЯ, и это не
+ * непоследовательность. Каталог живёт сутки, здоровье — измерение: и то и
+ * другое протухает само, потерять их значит один холодный старт. Избранное
+ * зритель ПОСТАВИЛ РУКАМИ, у него нарочно нет срока годности (см. шапку
+ * ниже), и молча стереть его при переименовании значило бы выбросить
+ * единственное, что он про себя сказал.
+ *
+ * Выполняется один раз: после переноса старого ключа больше нет, и второй
+ * заход ничего не находит.
+ */
+function migrateLegacy(): void {
+  try {
+    const old = localStorage.getItem(LEGACY.favourites);
+    // Переносим ТОЛЬКО если на новом месте пусто: иначе повторный запуск в
+    // одной вкладке затёр бы то, что зритель успел наотмечать после переезда.
+    if (old && !localStorage.getItem(FAV_KEY)) localStorage.setItem(FAV_KEY, old);
+    for (const k of Object.values(LEGACY)) localStorage.removeItem(k);
+  } catch {
+    // Приватный режим или переполненное хранилище — переносить нечего и
+    // некуда; приложение работает и без переноса.
+  }
+}
 
 /**
  * Версия формы записи. Меняется вместе с полями `Channel` или правилами отбора:
  * старая запись тогда отбрасывается, а не читается как своя. Без этого правка
  * фильтров показывала бы вчерашний список тем, у кого он уже лежит.
  */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 const VERSION = CACHE_VERSION;
+
+/**
+ * Версия записи ЗДОРОВЬЯ — своя, отдельная от версии списка.
+ *
+ * ⚠️ РАНЬШЕ БЫЛ ОДИН НОМЕР НА ДВА РАЗНЫХ ХРАНИЛИЩА, и это выяснилось ровно
+ * тогда, когда у записи списка появилось поле `scope`: бампнув версию списка,
+ * я заодно выбросил бы всем замеренное здоровье каналов, у которого форма не
+ * менялась вовсе. Здоровье — то, что приложение УЗНАЛО, проверяя каналы
+ * по одному; выбрасывать его за компанию с чужой правкой нельзя.
+ */
+const HEALTH_VERSION = 2;
 
 /** Сколько живёт запись. Сутки: каталог правят руками и не каждый день. */
 export const TTL_MS = 24 * 60 * 60 * 1000;
@@ -42,6 +89,16 @@ interface Entry {
   at: number;
   /** Адрес каталога: сменился `VITE_STREAM_URL` — старый список чужой. */
   src: string;
+  /**
+   * Режим отбора, которым список получен.
+   *
+   * ⚠️ БЕЗ ЭТОГО ПОЛЯ КЭШ ВРЁТ ПРИ СМЕНЕ РЕЖИМА. Здесь лежит РЕЗУЛЬТАТ
+   * отбора, а не сырой каталог (сам каталог — 870 КБ, это почти весь лимит
+   * localStorage). Значит список, снятый в режиме «спорт», в режиме «все
+   * каналы» — уже не ответ: зритель переключил бы на «все» и увидел те же
+   * тридцать две спортивные строки, пока не приедет сеть. Молча.
+   */
+  scope: string;
   channels: Channel[];
 }
 
@@ -62,13 +119,15 @@ function isChannel(x: unknown): x is Channel {
  *
  * `null` — «годного кэша нет», и это не ошибка: первый заход выглядит так же.
  */
-export function readCache(src: string, now = Date.now()): Channel[] | null {
+export function readCache(src: string, scope = 'sport', now = Date.now()): Channel[] | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const e = JSON.parse(raw) as Partial<Entry>;
     if (e.v !== VERSION) return null;
     if (e.src !== src) return null;
+    // Запись из другого режима — чужая: см. поле `scope` выше.
+    if ((e.scope ?? 'sport') !== scope) return null;
     if (typeof e.at !== 'number' || now - e.at > TTL_MS) return null;
     if (!Array.isArray(e.channels) || e.channels.length === 0) return null;
     if (!e.channels.every(isChannel)) return null;
@@ -87,10 +146,16 @@ export function readCache(src: string, now = Date.now()): Channel[] | null {
  * каталоге, и запомнить его на сутки значит на сутки показывать пустой экран
  * там, где сеть уже починилась.
  */
-export function writeCache(src: string, channels: Channel[], now = Date.now()): void {
+export function writeCache(
+  src: string, channels: Channel[], scope = 'sport', now = Date.now(),
+): void {
   if (channels.length === 0) return;
   try {
-    const entry: Entry = { v: VERSION, at: now, src, channels };
+    // ⚠️ В РЕЖИМЕ «ВСЕ КАНАЛЫ» ЭТО 2158 ЗАПИСЕЙ, а не тридцать две. Каждая —
+    // имя, группа и адрес; на боевом каталоге получается около 300 КБ, и в
+    // лимит localStorage (~5 МБ) это укладывается с запасом. Порог, при
+    // котором стоит вернуться к этому решению, — рост каталога на порядок.
+    const entry: Entry = { v: VERSION, at: now, src, scope, channels };
     localStorage.setItem(KEY, JSON.stringify(entry));
   } catch {
     // Квота или приватный режим. Кэш — ускорение, а не условие работы:
@@ -125,7 +190,7 @@ export function writeCache(src: string, channels: Channel[], now = Date.now()): 
 // заменяет `PINNED` (он решает, КАКИЕ каналы показывать), а поправляет его
 // там, где он ошибся: КАКОЙ показать первым.
 
-const HEALTH_KEY = 'ss_tv_health';
+const HEALTH_KEY = 'ml_tv_health';
 
 /** Сколько помнить исход. Сутки: канал чинят и ломают чаще, чем раз в неделю. */
 export const HEALTH_TTL_MS = 24 * 60 * 60 * 1000;
@@ -139,7 +204,7 @@ function readHealthRaw(now: number): Record<string, Health> {
     const raw = localStorage.getItem(HEALTH_KEY);
     if (!raw) return {};
     const e = JSON.parse(raw) as Partial<HealthEntry>;
-    if (e.v !== VERSION) return {};
+    if (e.v !== HEALTH_VERSION) return {};
     if (typeof e.at !== 'number' || now - e.at > HEALTH_TTL_MS) return {};
     if (!e.urls || typeof e.urls !== 'object') return {};
     const out: Record<string, Health> = {};
@@ -168,7 +233,7 @@ export function markHealth(url: string, health: Health, now = Date.now()): void 
   try {
     const urls = readHealthRaw(now);
     urls[url] = health;
-    const entry: HealthEntry = { v: VERSION, at: now, urls };
+    const entry: HealthEntry = { v: HEALTH_VERSION, at: now, urls };
     localStorage.setItem(HEALTH_KEY, JSON.stringify(entry));
   } catch {
     // см. writeCache — кэш это ускорение, а не условие работы
@@ -188,10 +253,14 @@ export function markHealth(url: string, health: Health, now = Date.now()): void 
 // каталог — тоже, а избранное зритель ставил руками, и стирать его по таймеру
 // нельзя.
 
-const FAV_KEY = 'ss_tv_favourites';
+const FAV_KEY = 'ml_tv_favourites';
 
 /** Адреса избранных каналов. Пустой массив — «не выбрано», а не ошибка. */
 export function readFavourites(): string[] {
+  // Первое обращение к избранному — и есть момент, когда старый ключ ещё
+  // может существовать. Здесь, а не при загрузке модуля: так перенос
+  // случается ровно тогда, когда его результат кому-то нужен.
+  migrateLegacy();
   try {
     const raw = localStorage.getItem(FAV_KEY);
     if (!raw) return [];

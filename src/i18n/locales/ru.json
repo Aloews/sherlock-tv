@@ -17,6 +17,12 @@
     "favourites": "Избранное",
     "favourite": "В избранное",
     "unfavourite": "Убрать из избранного",
-    "nothing_found": "Ничего не нашлось"
+    "nothing_found": "Ничего не нашлось",
+    "scope_sport": "Спорт",
+    "scope_all": "Все каналы",
+    "scope_everything": "Всё, включая недоступные",
+    "group_all": "Все группы · {{n}}",
+    "blocked_http": "Не откроется: http",
+    "show_more": "Показать ещё {{n}}"
   }
 }

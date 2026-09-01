@@ -25,7 +25,7 @@ import ar from './locales/ar.json';
 export const APP_LANGS = ['ru', 'en', 'es', 'pt', 'fr', 'zh', 'ja', 'ko', 'ar'] as const;
 export type AppLang = (typeof APP_LANGS)[number];
 
-const LANG_KEY = 'tv_lang';
+const LANG_KEY = 'ml_lang';
 
 const RESOURCES: Record<AppLang, object> = { ru, en, es, pt, fr, zh, ja, ko, ar };
 

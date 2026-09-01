@@ -17,6 +17,12 @@
     "favourites": "お気に入り",
     "favourite": "お気に入りに追加",
     "unfavourite": "お気に入りから削除",
-    "nothing_found": "見つかりませんでした"
+    "nothing_found": "見つかりませんでした",
+    "scope_sport": "スポーツ",
+    "scope_all": "すべてのチャンネル",
+    "scope_everything": "再生できないものも含めすべて",
+    "group_all": "すべてのグループ · {{n}}",
+    "blocked_http": "再生不可: http",
+    "show_more": "さらに {{n}} 件"
   }
 }

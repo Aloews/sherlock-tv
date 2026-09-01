@@ -33,9 +33,9 @@ describe('channelCache', () => {
 
   it('expires after the TTL', () => {
     const t0 = 1_000_000;
-    writeCache(SRC, [ch('A')], t0);
-    expect(readCache(SRC, t0 + TTL_MS - 1)).not.toBeNull();
-    expect(readCache(SRC, t0 + TTL_MS + 1)).toBeNull();
+    writeCache(SRC, [ch('A')], 'sport', t0);
+    expect(readCache(SRC, 'sport', t0 + TTL_MS - 1)).not.toBeNull();
+    expect(readCache(SRC, 'sport', t0 + TTL_MS + 1)).toBeNull();
   });
 
   // Пустота — состояние сети, а не факт о каталоге. Запомнить её на сутки
@@ -53,12 +53,12 @@ describe('channelCache', () => {
 
   describe('reads defensively — the list goes straight into the player', () => {
     it('survives outright garbage', () => {
-      localStorage.setItem('ss_tv_channels', 'not json at all');
+      localStorage.setItem('ml_tv_channels', 'not json at all');
       expect(readCache(SRC)).toBeNull();
     });
 
     it('rejects an entry from an older format version', () => {
-      localStorage.setItem('ss_tv_channels', JSON.stringify({
+      localStorage.setItem('ml_tv_channels', JSON.stringify({
         v: 0, at: Date.now(), src: SRC, channels: [ch('A')],
       }));
       expect(readCache(SRC)).toBeNull();
@@ -66,21 +66,21 @@ describe('channelCache', () => {
 
     // Ровно то, что уронило бы экран: `undefined.url` в плеере.
     it('rejects a row that is missing url', () => {
-      localStorage.setItem('ss_tv_channels', JSON.stringify({
+      localStorage.setItem('ml_tv_channels', JSON.stringify({
         v: 1, at: Date.now(), src: SRC, channels: [{ name: 'A', group: '', logo: null }],
       }));
       expect(readCache(SRC)).toBeNull();
     });
 
     it('rejects channels that is not an array', () => {
-      localStorage.setItem('ss_tv_channels', JSON.stringify({
+      localStorage.setItem('ml_tv_channels', JSON.stringify({
         v: 1, at: Date.now(), src: SRC, channels: { name: 'A' },
       }));
       expect(readCache(SRC)).toBeNull();
     });
 
     it('rejects an entry with no timestamp', () => {
-      localStorage.setItem('ss_tv_channels', JSON.stringify({
+      localStorage.setItem('ml_tv_channels', JSON.stringify({
         v: 1, src: SRC, channels: [ch('A')],
       }));
       expect(readCache(SRC)).toBeNull();
@@ -134,21 +134,21 @@ describe('память об исходах каналов', () => {
   });
 
   it('отбрасывает запись прежней версии формата', () => {
-    localStorage.setItem('ss_tv_health', JSON.stringify({
+    localStorage.setItem('ml_tv_health', JSON.stringify({
       v: 0, at: Date.now(), urls: { 'https://a/1.m3u8': 'played' },
     }));
     expect(readHealth()).toEqual({});
   });
 
   it('отбрасывает значения, которых не бывает', () => {
-    localStorage.setItem('ss_tv_health', JSON.stringify({
+    localStorage.setItem('ml_tv_health', JSON.stringify({
       v: 2, at: Date.now(), urls: { good: 'played', junk: 'что-то ещё' },
     }));
     expect(readHealth()).toEqual({ good: 'played' });
   });
 
   it('переживает мусор в хранилище', () => {
-    localStorage.setItem('ss_tv_health', 'не json');
+    localStorage.setItem('ml_tv_health', 'не json');
     expect(readHealth()).toEqual({});
   });
 
@@ -191,11 +191,11 @@ describe('избранное', () => {
   });
 
   it('отбрасывает мусор из хранилища', () => {
-    localStorage.setItem('ss_tv_favourites', 'не json');
+    localStorage.setItem('ml_tv_favourites', 'не json');
     expect(readFavourites()).toEqual([]);
-    localStorage.setItem('ss_tv_favourites', JSON.stringify({ not: 'array' }));
+    localStorage.setItem('ml_tv_favourites', JSON.stringify({ not: 'array' }));
     expect(readFavourites()).toEqual([]);
-    localStorage.setItem('ss_tv_favourites', JSON.stringify(['https://ok/1.m3u8', 42, 'мусор']));
+    localStorage.setItem('ml_tv_favourites', JSON.stringify(['https://ok/1.m3u8', 42, 'мусор']));
     expect(readFavourites()).toEqual(['https://ok/1.m3u8']);
   });
 
@@ -210,5 +210,55 @@ describe('избранное', () => {
     toggleFavourite('https://a/1.m3u8');
     clearCache();
     expect(readFavourites()).toEqual([]);
+  });
+});
+
+// ── Переезд с прежнего префикса ключей ───────────────────────
+//
+// ⚠️ ЕДИНСТВЕННОЕ МЕСТО ЭТОЙ ПРАВКИ, ГДЕ МОЖНО ПОТЕРЯТЬ ДАННЫЕ ЗРИТЕЛЯ.
+// Каталог и здоровье протухают сами — их потеря стоит одного холодного
+// старта. Избранное зритель поставил руками, у него нарочно нет срока
+// годности, и молча стереть его при переименовании приложения значило бы
+// выбросить единственное, что он про себя сказал.
+describe('переезд ss_ → ml_', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('забирает избранное со старого ключа', () => {
+    localStorage.setItem('ss_tv_favourites',
+      JSON.stringify(['https://a.test/1.m3u8', 'https://b.test/2.m3u8']));
+    expect(readFavourites()).toEqual(['https://a.test/1.m3u8', 'https://b.test/2.m3u8']);
+    // И кладёт на новое место, чтобы второй раз читать было уже неоткуда.
+    expect(localStorage.getItem('ml_tv_favourites')).toBeTruthy();
+  });
+
+  it('убирает за собой все три старых ключа', () => {
+    localStorage.setItem('ss_tv_favourites', JSON.stringify(['https://a.test/1.m3u8']));
+    localStorage.setItem('ss_tv_channels', 'что угодно');
+    localStorage.setItem('ss_tv_health', 'что угодно');
+    readFavourites();
+    for (const k of ['ss_tv_favourites', 'ss_tv_channels', 'ss_tv_health']) {
+      expect(localStorage.getItem(k), k).toBeNull();
+    }
+  });
+
+  // ⚠️ ПОВТОРНЫЙ ЗАПУСК НЕ ЗАТИРАЕТ НОВОЕ. Читатель вызывается на каждый
+  // рендер; если бы перенос слепо копировал старое поверх нового, звёзды,
+  // поставленные после переезда, исчезали бы при следующем чтении.
+  it('не затирает то, что отмечено уже после переезда', () => {
+    localStorage.setItem('ml_tv_favourites', JSON.stringify(['https://new.test/1.m3u8']));
+    localStorage.setItem('ss_tv_favourites', JSON.stringify(['https://old.test/1.m3u8']));
+    expect(readFavourites()).toEqual(['https://new.test/1.m3u8']);
+  });
+
+  it('на чистом хранилище ничего не выдумывает', () => {
+    expect(readFavourites()).toEqual([]);
+  });
+
+  // Старое значение читается ТАК ЖЕ недоверчиво, как своё: в прежнем ключе
+  // мог лежать мусор от ещё более старой версии.
+  it('фильтрует мусор, приехавший со старого ключа', () => {
+    localStorage.setItem('ss_tv_favourites',
+      JSON.stringify(['https://ok.test/1.m3u8', 42, 'не-адрес', null]));
+    expect(readFavourites()).toEqual(['https://ok.test/1.m3u8']);
   });
 });

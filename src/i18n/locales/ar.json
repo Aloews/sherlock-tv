@@ -17,6 +17,12 @@
     "favourites": "المفضّلة",
     "favourite": "أضف إلى المفضّلة",
     "unfavourite": "أزل من المفضّلة",
-    "nothing_found": "لم يُعثر على شيء"
+    "nothing_found": "لم يُعثر على شيء",
+    "scope_sport": "رياضة",
+    "scope_all": "كل القنوات",
+    "scope_everything": "الكل، بما لا يعمل",
+    "group_all": "كل المجموعات · {{n}}",
+    "blocked_http": "لن تفتح: http",
+    "show_more": "عرض {{n}} إضافية"
   }
 }

@@ -10,9 +10,15 @@ describe('orderChannels', () => {
     expect(out.map((c) => c.name)).toEqual(['Setanta Sports 1 HD', 'Divi Sport']);
   });
 
+  // ⚠️ ОЖИДАНИЕ ЗДЕСЬ МЕНЯЕТСЯ ВМЕСТЕ С PINNED, И ТАК И ЗАДУМАНО. Раньше тут
+  // стояло ['Setanta Sports 2 HD', 'Viasat Sport', 'EUROSPORT 1'] — до того,
+  // как владелец прислал свой список и `eurosport` переехал с конца на четвёртую
+  // строку. Сверять с pinRank вместо имён было бы тавтологией: проверка прошла
+  // бы при любом порядке. Смысл именно в том, чтобы СЛУЧАЙНАЯ перестановка
+  // списка ловилась, а намеренная требовала правки здесь.
   it('keeps pinned channels in the order PINNED declares, not playlist order', () => {
-    const out = orderChannels([ch('EUROSPORT 1'), ch('Viasat Sport'), ch('Setanta Sports 2 HD')]);
-    expect(out.map((c) => c.name)).toEqual(['Setanta Sports 2 HD', 'Viasat Sport', 'EUROSPORT 1']);
+    const out = orderChannels([ch('Viasat Sport'), ch('Setanta Sports 2 HD'), ch('EUROSPORT 1')]);
+    expect(out.map((c) => c.name)).toEqual(['EUROSPORT 1', 'Setanta Sports 2 HD', 'Viasat Sport']);
   });
 
   // Устойчивость — не деталь: без неё незакреплённые тасовались бы на каждой
@@ -37,15 +43,32 @@ describe('orderChannels', () => {
     expect(orderChannels([])).toEqual([]);
   });
 
-  // Замер 25.08.2026: канал отдаёт 404. Поднять его наверх значит вернуть тот
-  // самый баг — первый канал играет сам, и мёртвый первый ломает весь экран.
-  // ⚠️ «Матч! ПЛАНЕТА» мертва, а «Матч! ПРЕМЬЕР» жива и закреплена первой:
-  // проверка обязана их различать, иначе она бессмысленна.
-  it('does not pin the channels that measured dead', () => {
-    expect(isPinned(ch('Матч! Планета'))).toBe(false);
-    expect(isPinned(ch('KHL'))).toBe(false);
-    expect(isPinned(ch('FUTBOL UZ'))).toBe(false);
+  // ⚠️ ЭТА ПРОВЕРКА УТВЕРЖДАЛА НЕВЕРНОЕ, И ЕЁ ПРИШЛОСЬ ПЕРЕПИСАТЬ. Она
+  // требовала, чтобы «Матч! Планета» и «KHL» НЕ были закреплены — на основании
+  // замера 25.08.2026, где каждый отдал 404. Перезамер 31.08.2026 показал, что
+  // дело было в конкретной РАЗДАЧЕ, а не в канале:
+  //
+  //   Матч! Планета   SPORT 🏆 404 · Uplink ✓ 2526 КБ · ССТ 403
+  //   KHL             четыре живых источника из шести
+  //   FUTBOL UZ       единственный https-источник, 404 — мёртв по-настоящему
+  //
+  // Имя в PINNED значит «зритель назвал этот канал». Живость решается ПО
+  // АДРЕСУ и во время работы (markHealth → nextAlive), а не по имени: у одного
+  // канала в этом каталоге до шести раздач, и вычёркивать имя целиком из-за
+  // одной сломанной — терять рабочие.
+  //
+  // Защита от «мёртвый первый ломает экран» никуда не делась, она просто в
+  // другом месте — nextAlive, и на неё свои проверки ниже.
+  it('pins by NAME, and does not confuse a dead relay with a dead channel', () => {
+    // Живы, и закреплены — хотя одна из их раздач отдаёт 404.
+    expect(isPinned(ch('Матч! Планета'))).toBe(true);
     expect(isPinned(ch('Матч! Премьер'))).toBe(true);
+
+    // ⚠️ ОТРИЦАТЕЛЬНАЯ СТОРОНА: список НЕ ловит что попало. Без неё проверка
+    // проходила бы и на `isPinned = () => true`.
+    expect(isPinned(ch('FUTBOL UZ'))).toBe(false);
+    expect(isPinned(ch('Divi Sport'))).toBe(false);
+    expect(isPinned(ch('AYM HD'))).toBe(false);
   });
 
   // Названные зрителем каналы. Большинство сегодня отдаётся по http и до экрана
@@ -216,5 +239,39 @@ describe('filterChannels', () => {
   it('сохраняет порядок входного списка', () => {
     expect(filterChannels(list, 's', false).map((c) => c.name))
       .toEqual(['Setanta Sports 1 HD', 'Divi Sport']);
+  });
+});
+
+// ── Канал по умолчанию ───────────────────────────────────────
+//
+// Владелец попросил, чтобы «Real Madrid» игрался сразу при открытии. Канал
+// измерен 31.08.2026: 311 КБ видео, CORS `*`. Он стоит первой строкой PINNED,
+// и эта позиция — единственное место, где сказано «главный».
+describe('канал по умолчанию', () => {
+  const RM = ch('Real Madrid', 'https://rm.test/1.m3u8');
+  const OTHER = ch('Матч ТВ', 'https://match.test/1.m3u8');
+
+  it('играет первым на чистом устройстве', () => {
+    expect(orderChannels([OTHER, RM])[0].name).toBe('Real Madrid');
+  });
+
+  // ⚠️ ГЛАВНОЕ. Без обхода здоровья он играл бы только на ПЕРВОМ заходе: у
+  // вернувшегося зрителя уже смотренный канал лежит в лучшем ведре.
+  it('остаётся первым, даже если зритель уже смотрел другой канал', () => {
+    const health = { [OTHER.url]: 'played' as const };
+    expect(orderChannels([OTHER, RM], health)[0].name).toBe('Real Madrid');
+  });
+
+  // ⚠️ И ОБРАТНАЯ СТОРОНА, без которой это была бы та же ошибка, что стоила
+  // трёх отказов подряд: мёртвый первый ломает экран.
+  it('уходит вниз, если отказал сам', () => {
+    const health = { [RM.url]: 'failed' as const, [OTHER.url]: 'played' as const };
+    expect(orderChannels([RM, OTHER], health)[0].name).toBe('Матч ТВ');
+  });
+
+  // Избранное остаётся выше всего: это прямое указание зрителя, а канал по
+  // умолчанию — решение владельца за него.
+  it('уступает избранному зрителя', () => {
+    expect(orderChannels([RM, OTHER], {}, [OTHER.url])[0].name).toBe('Матч ТВ');
   });
 });

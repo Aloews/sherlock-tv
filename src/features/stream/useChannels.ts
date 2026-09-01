@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LOADING, ok, failed, type LoadState } from '@/shared/lib/loadState';
-import { sportChannels, type Channel } from './playlist';
+import { channelsFor, type Channel, type ChannelScope } from './playlist';
 import { readCache, writeCache } from './channelCache';
 
 /**
@@ -25,13 +25,21 @@ import { readCache, writeCache } from './channelCache';
  * Отменяется через `AbortController`: уход с экрана на середине загрузки не
  * должен дописывать состояние в размонтированный компонент.
  */
-export function useChannels(playlistUrl: string | undefined): LoadState<Channel[]> {
+export function useChannels(
+  playlistUrl: string | undefined,
+  scope: ChannelScope = 'sport',
+  allowAdult = false,
+): LoadState<Channel[]> {
   const [state, setState] = useState<LoadState<Channel[]>>(LOADING);
 
   useEffect(() => {
     if (!playlistUrl) return;
 
-    const cached = readCache(playlistUrl);
+    // ⚠️ КЭШ КЛЮЧУЕТСЯ РЕЖИМОМ. В нём лежит РЕЗУЛЬТАТ отбора, а не сырой
+    // каталог, поэтому список, снятый в режиме «спорт», в режиме «все каналы»
+    // уже не ответ: без этого зритель переключил бы на «все» и увидел те же
+    // тридцать две строки, пока не приедет сеть. Молча.
+    const cached = readCache(playlistUrl, scope);
     if (cached) setState(ok(cached));
     else setState(LOADING);
 
@@ -45,8 +53,8 @@ export function useChannels(playlistUrl: string | undefined): LoadState<Channel[
         return res.text();
       })
       .then((text) => {
-        const fresh = sportChannels(text);
-        writeCache(playlistUrl, fresh);
+        const fresh = channelsFor(text, scope, allowAdult);
+        writeCache(playlistUrl, fresh, scope);
         setState(ok(fresh));
       })
       .catch((err: unknown) => {
@@ -57,7 +65,7 @@ export function useChannels(playlistUrl: string | undefined): LoadState<Channel[
       });
 
     return () => abort.abort();
-  }, [playlistUrl]);
+  }, [playlistUrl, scope, allowAdult]);
 
   return state;
 }
