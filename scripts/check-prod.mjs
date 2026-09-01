@@ -139,11 +139,28 @@ async function checkTv() {
     return;
   }
 
-  // Тот же отбор, что у приложения: спортивные группы + закреплённые, только https.
-  const PIN = ['матч! премьер', 'матч премьер', 'беларусь 5', 'матч! футбол',
-    'футбол 1', 'футбол 2', 'футбол 3', 'setanta sports ua', 'setanta',
-    'viasat sport', 'eurosport', 'real madrid', 'barca', 'arena sport',
-    'diema sport', 'nova sport'];
+  // ⚠️ СПИСОК ЧИТАЕТСЯ ИЗ ИСХОДНИКА, А НЕ КОПИРУЕТСЯ СЮДА. Раньше здесь лежала
+  // копия PINNED, и она немедленно устарела: приложение уже ставило первым
+  // «Real Madrid», а проверка всё ещё рапортовала «верхний канал играет: Матч!
+  // Премьер». То есть проверка перестала проверять приложение и об этом
+  // молчала — ровно тот класс ложной зелени, ради которого этот файл написан.
+  //
+  // Разбор регуляркой, а не импортом: это .mjs без сборки, а playlist.ts —
+  // TypeScript. Зато при неудаче разбора скрипт ПАДАЕТ, а не подставляет
+  // пустой список: пустой PINNED дал бы «0 каналов к показу» и выглядел бы
+  // как поломка прода, а не как поломка проверки.
+  const src = readFileSync('src/features/stream/playlist.ts', 'utf-8');
+  const block = /export const PINNED: readonly string\[\] = \[([\s\S]*?)\];/.exec(src);
+  if (!block) {
+    record('ТВ: список PINNED прочитан', false,
+           'не нашёл PINNED в src/features/stream/playlist.ts', 'н/д');
+    return;
+  }
+  const PIN = [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  if (PIN.length === 0) {
+    record('ТВ: список PINNED прочитан', false, 'PINNED разобран пустым', 'н/д');
+    return;
+  }
   const rank = (n) => {
     const low = n.toLowerCase();
     const i = PIN.findIndex((p) => low.includes(p));
