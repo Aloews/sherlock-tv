@@ -250,9 +250,104 @@ async function checkBundle() {
   }
 }
 
+// --------------------------------------------------- совместный просмотр ----
+// ⚠️ ПРОВЕРЯЕТСЯ НЕ «РАБОТАЕТ ЛИ РАЗГОВОР», А ТО, ЧТО ЛОМАЕТСЯ МОЛЧА.
+//
+// Ломаются здесь три вещи, и все три снаружи выглядят одинаково — «не
+// подключается»:
+//
+//   маршрут пропал      релей переехал или выкачен без livekit.js — 404
+//   CORS пропал         браузер выбрасывает и успешный ответ; на этом же
+//                       релее так уже ломался каталог
+//   права расширились   пропуск, выданный с roomAdmin, впускает в чужие
+//                       комнаты, и заметить это можно только разобрав его
+//
+// ⚠️ 503 — ЭТО НЕ ПАДЕНИЕ. Совместный просмотр необязателен: пока на релее нет
+// LIVEKIT_*, честный 503 и есть правильный ответ. Красным он быть не может —
+// иначе проверка требовала бы включить то, чего владелец мог не включать. А
+// вот 404 на том же месте — падение: значит выкачено не то.
+async function checkTogether() {
+  const relay = env('VITE_STREAM_URL')
+    ?? 'https://stream-service-production-1616.up.railway.app/playlist.m3u8';
+  const base = new URL('/livekit-token', relay);
+
+  let r;
+  try {
+    r = await get(`${base}?room=check-prod-probe&name=check-prod`);
+  } catch (e) {
+    record('Вместе: выдача пропусков', false, String(e).slice(0, 50), 'н/д');
+    return;
+  }
+
+  if (r.status === 404) {
+    record('Вместе: выдача пропусков', false,
+           'маршрут /livekit-token не выкачен (404)', 'н/д');
+    return;
+  }
+
+  // Заголовок обязателен на ЛЮБОМ ответе, включая 503 и 403: без него
+  // браузер не покажет зрителю даже причину отказа.
+  const cors = r.headers.get('access-control-allow-origin');
+  record('Вместе: CORS на месте', cors === '*',
+         cors ? `access-control-allow-origin: ${cors}` : 'заголовка нет',
+         'без него браузер выбрасывает и успешный ответ');
+
+  if (r.status === 503) {
+    record('Вместе: выдача пропусков', true,
+           'релей отвечает 503 — LIVEKIT_* на нём не заданы, это норма', 'н/д');
+    return;
+  }
+  if (r.status === 403) {
+    record('Вместе: выдача пропусков', true,
+           'выдача закрыта LIVEKIT_ACCESS_TOKEN — проверить изнутри нечем', 'н/д');
+    return;
+  }
+  if (!r.ok) {
+    record('Вместе: выдача пропусков', false, `HTTP ${r.status}`, 'н/д');
+    return;
+  }
+
+  const body = await r.json().catch(() => null);
+  const ok = body && typeof body.url === 'string' && typeof body.token === 'string';
+  record('Вместе: пропуск выдан', Boolean(ok),
+         ok ? `${body.url}, комната ${body.room}` : 'ответ 200 без пропуска',
+         'спрашивается ПРОПУСК, а не код ответа');
+  if (!ok) return;
+
+  // Пропуск РАЗБИРАЕТСЯ. «Ответил 200» ничего не говорит о том, во что
+  // именно пускает выданный ключ.
+  let grant = null;
+  try {
+    grant = JSON.parse(Buffer.from(body.token.split('.')[1], 'base64url').toString('utf8'));
+  } catch { /* разберётся ниже как отсутствие */ }
+  const video = grant?.video ?? {};
+  const narrow = video.roomJoin === true
+    && video.room === body.room
+    && !video.roomAdmin && !video.roomCreate && !video.roomList
+    && Array.isArray(video.canPublishSources)
+    && !video.canPublishSources.includes('screen_share');
+  record('Вместе: права узкие', narrow,
+         narrow ? `room=${video.room}, источники: ${(video.canPublishSources ?? []).join(', ')}`
+                : 'в пропуске лишние права',
+         'проверяется и то, чего в пропуске быть НЕ должно');
+
+  // ⚠️ ОТРИЦАТЕЛЬНЫЙ КОНТРОЛЬ: негодный код комнаты обязан быть отвергнут.
+  // Без него всё выше зеленело бы и на выдаче, подписывающей что угодно.
+  let bad;
+  try {
+    bad = await get(`${base}?room=%D0%BA%D0%BE%D0%B4`);
+  } catch { bad = null; }
+  const rejects = bad?.status === 400;
+  record('Вместе: контроль негодного кода', rejects,
+         rejects ? 'кириллический код отвергнут, как и должно'
+                 : `выдача приняла негодный код (HTTP ${bad?.status ?? 'нет ответа'})`,
+         rejects ? 'проверка способна упасть' : '⚠ КОНТРОЛЬ НЕ СРАБОТАЛ');
+}
+
 // ------------------------------------------------------------- печать -------
 console.log(`\nПроверка прода${APP ? `: ${APP}` : ' (только каталог и каналы)'}\n`);
 await checkTv();
+await checkTogether();
 await checkBundle();
 
 const w = Math.max(...results.map((r) => r.name.length));

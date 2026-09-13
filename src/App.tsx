@@ -14,6 +14,7 @@ import {
 import { buildReportMailto } from '@/features/stream/reportMailto';
 import { ChannelsPanel } from '@/features/stream/ChannelsPanel';
 import { showCatalogue, showAdult } from '@/features/stream/config';
+import { TogetherPanel } from '@/features/together/TogetherPanel';
 import { LangPicker } from '@/shared/ui/LangPicker';
 import { Logo, APP_NAME } from '@/shared/ui/Logo';
 
@@ -156,6 +157,17 @@ export function App() {
                 onPlaying={handlePlaying}
               />
             )}
+
+            {/* Смотреть вместе — СРАЗУ ПОД ПЛЕЕРОМ, а не в конце списка
+                каналов. Разговор идёт о том, что на экране, и уходить за ним
+                вниз через шестьдесят строк — значит потерять картинку из
+                виду. Панели нет вовсе, если совместный просмотр не настроен
+                (VITE_LIVEKIT_TOKEN_URL). */}
+            <TogetherPanel
+              currentUrl={playing}
+              currentTitle={ordered.find((c) => c.url === playing)?.name ?? ''}
+              onFollow={setSelected}
+            />
 
             {allDead && (
               <p className="text-brand-muted text-[12px] text-center pt-8">{t('stream.all_failed')}</p>

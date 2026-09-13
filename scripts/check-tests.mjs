@@ -100,6 +100,24 @@ testcase(
 );
 
 testcase(
+  'vitest замечает угадываемый код комнаты',
+  'код комнаты — единственный ключ от неё: проверить, кто стучится, релею ' +
+  'нечем. Проверка, которая не краснеет от кода «room», не охраняет ничего',
+  () => withBroken('src/features/together/roomCode.ts',
+    (s) => s.replace('const LENGTH = 10;', 'const LENGTH = 4;'),
+    () => !passes('npx vitest run src/features/together/roomCode.test.ts')),
+);
+
+testcase(
+  'vitest замечает 200 без пропуска',
+  'ответ 200 над сломанным следующим шагом называет живым то, что не ' +
+  'работает: такой «пропуск» отвергнет уже LiveKit, на шаг позже и не там',
+  () => withBroken('src/features/together/tokenApi.ts',
+    (s) => s.replace("  if (typeof grant.url !== 'string' || typeof grant.token !== 'string'\n      || grant.url.length === 0 || grant.token.length === 0) {\n    return { status: 'malformed' };\n  }\n", ''),
+    () => !passes('npx vitest run src/features/together/tokenApi.test.ts')),
+);
+
+testcase(
   'check-prod замечает мёртвый адрес',
   'проверка прода — единственная, способная упасть по той причине, по которой ' +
   'ломается приложение; если она зелёная на несуществующем хосте, она пустая',
