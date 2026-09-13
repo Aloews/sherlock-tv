@@ -155,21 +155,48 @@ async function relay() {
 function bundle() {
   const dir = 'dist/assets';
   if (!existsSync(dir)) {
-    row('Вес сборки', 'не измерено', 'нет dist — сначала npm run build', 'skip');
+    row('Вес первого захода', 'не измерено', 'нет dist — сначала npm run build', 'skip');
     return;
   }
-  let bytes = 0;
+  // ⚠️ ПЕРВЫЙ ЗАХОД И ДОГРУЖАЕМОЕ — РАЗНЫЕ ЧИСЛА, И СУММА ИХ ВРЁТ. Раньше
+  // строка складывала ВСЁ, что лежит в dist/assets. С появлением совместного
+  // просмотра там появился кусок livekit-client на 586 КБ, который не
+  // грузится, пока никто не нажал «смотреть вместе», — и общая сумма
+  // объявила бы первый заход потяжелевшим на две трети, не будучи им.
+  //
+  // Разделяются по имени: entry-куски Vite зовёт `index-*`, ленивые — по
+  // имени модуля (`livekit-client.esm-*`).
+  let first = 0;
+  let lazy = 0;
+  const lazyNames = [];
   for (const f of readdirSync(dir)) {
-    if (f.endsWith('.js') || f.endsWith('.css')) bytes += statSync(join(dir, f)).size;
+    if (!f.endsWith('.js') && !f.endsWith('.css')) continue;
+    const size = statSync(join(dir, f)).size;
+    if (f.startsWith('index-')) {
+      first += size;
+    } else {
+      lazy += size;
+      lazyNames.push(f.replace(/-[A-Za-z0-9_-]{8}\.js$/, ''));
+    }
   }
-  const kb = Math.round(bytes / 1024);
+  const kb = Math.round(first / 1024);
   // hls.js — примерно треть этого веса, и на iOS он не нужен вовсе: там
   // воспроизведение нативное (см. useHlsPlayer). Динамический import() под
   // ветку «нет нативной поддержки» — очевидный следующий шаг, но он меняет
   // перенесённый код, а не адрес, поэтому сделан отдельно от переезда.
-  row('Вес сборки', `${kb} КБ`,
+  row('Вес первого захода', `${kb} КБ`,
       kb > 900 ? '⚠ вырос — проверить, что попало в бандл' : 'в пределах прежнего',
       kb > 900 ? 'warn' : 'ok');
+
+  // ⚠️ СТРОКА ПЕЧАТАЕТСЯ ДАЖЕ КОГДА ЛЕНИВЫХ КУСКОВ НЕТ. Их отсутствие значит
+  // одно из двух: либо их правда нет, либо сборка шла БЕЗ VITE_STREAM_URL — а
+  // тогда Vite вырезает мёртвой веткой весь плеер вместе с панелью
+  // совместного просмотра, и «вес первого захода» занижен на треть. Молчащая
+  // строка выдала бы второй случай за первый.
+  row('Догружается по требованию', lazy ? `${Math.round(lazy / 1024)} КБ` : 'нет',
+      lazy ? lazyNames.join(', ')
+           : 'сборка без VITE_STREAM_URL вырезает плеер и панель — число выше занижено',
+      lazy ? 'ok' : 'warn');
 
   const cache = 5 * 1024;
   row('localStorage', `лимит ~${cache} КБ`,
