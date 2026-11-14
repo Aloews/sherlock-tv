@@ -1,5 +1,7 @@
 # MatchLive
 
+[Project map](./docs/MAP.md) — project architecture, agent workflow and verified setup status.
+
 Спортивные каналы в прямом эфире, из m3u-каталога.
 
 Приложение самостоятельное. Код когда-то был экраном внутри другого проекта и
