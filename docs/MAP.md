@@ -83,3 +83,8 @@ This section is shared across the active project maps. It records installation a
 | codebase-memory-mcp | Recorded here | Not verified; no persistent supported host indexed |
 | Spotify Portal / shunt | Recorded here | Not verified; Portal authentication and AiKA readiness not established |
 
+
+## Agent runtime status — 2026-11-14
+
+- Caveman 4.1.0 and Qwen2.5-Coder 3B are documented as shared engineering tools, but MatchLive has no verified repository-owned agent workflow or installed runtime.
+- Do not install an autonomous coding agent in the playback runtime. Any future Qwen use belongs in a separate, isolated GitHub Actions runner.
