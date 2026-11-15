@@ -21,4 +21,6 @@ jobs:
       # поводы, и по названию шага должно быть видно, какой именно.
       - run: node scripts/check-i18n.mjs
       - run: npx vitest run
+      # Проверяем не только продукт, но и способность каждой проверки обнаружить поломку.
+      - run: node scripts/check-tests.mjs
       - run: npx vite build
