@@ -101,6 +101,7 @@ npx tsc --noEmit
 npm run build
 npm test                    # 134 теста
 node scripts/check-i18n.mjs # 18 ключей × 9 языков
+node scripts/check-tests.mjs # отрицательные контроли: проверки обязаны замечать поломки
 ```
 
 Интерфейс переведён на ru, en, es, pt, fr, ar, ja, ko, zh. Ключ добавляется во
