@@ -31,7 +31,9 @@ pub struct SystemError {
 
 impl SystemError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self {\n            message: message.into(),\n        }
+        Self {
+            message: message.into(),
+        }
     }
 }
 
