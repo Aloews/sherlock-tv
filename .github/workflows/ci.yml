@@ -1,26 +1,48 @@
-name: ci
-
+name: Sherlock CI
 on:
   push:
-    branches: [main]
+    branches: [main, "rebuild/**"]
   pull_request:
   workflow_dispatch:
-
 jobs:
-  check:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci
-      - run: npx tsc --noEmit
-      # Отдельным шагом от сборки: падение типов и падение сборки — разные
-      # поводы, и по названию шага должно быть видно, какой именно.
-      - run: node scripts/check-i18n.mjs
-      - run: npx vitest run
-      # Проверяем не только продукт, но и способность каждой проверки обнаружить поломку.
-      - run: node scripts/check-tests.mjs
-      - run: npx vite build
+          node-version: 22
+      - run: npm install
+        working-directory: apps/web
+      - run: npm run build
+        working-directory: apps/web
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sherlock
+          POSTGRES_PASSWORD: sherlock
+          POSTGRES_DB: sherlock
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sherlock -d sherlock"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace
+        env:
+          DATABASE_URL: postgres://sherlock:sherlock@localhost:5432/sherlock

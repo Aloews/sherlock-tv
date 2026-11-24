@@ -1,120 +1,25 @@
-# MatchLive
+# Sherlock — Historical World Simulation
 
-Спортивные каналы в прямом эфире, из m3u-каталога.
+Sherlock is a persistent systemic simulation of human civilization. The world—not football—is the product: ecology, geography, population, knowledge, production, trade, finance, institutions, power, culture and historical memory interact in one causal system. Football is an optional specialized sector.
 
-Приложение самостоятельное. Код когда-то был экраном внутри другого проекта и
-переехал оттуда целиком — отсюда `git log` до августа 2026 и имя репозитория;
-на сам продукт это не распространяется: имя, знак и ключи хранилища свои.
+## Stack
+- Rust workspace: deterministic domain kernel.
+- Axum API and PostgreSQL persistence.
+- React + TypeScript + Vite client.
+- GitHub Actions for Rust, web and database checks.
 
-```bash
-npm install
-cp .env.example .env.local     # и вписать VITE_STREAM_URL
-npm run dev
-```
-
-## Что здесь есть
-
-| | |
-|---|---|
-| `src/features/stream/` | вся логика: разбор каталога, отбор, порядок, кэш, плеер |
-| `src/App.tsx` | экран целиком |
-| `src/shared/ui/Logo.tsx` | знак и имя приложения — одна константа на проект |
-| `iptv_tester.py` | проверка каналов по расписанию |
-
-Каталог отдаёт релей `stream-service` из
-[`Aloews/sherlock-ai-bot`](https://github.com/Aloews/sherlock-ai-bot).
-
-⚠️ **Имя приложения живёт в одном месте** — `APP_NAME` в `src/shared/ui/Logo.tsx`.
-Заголовок, вкладка и знак читают её; `package.json` и этот файл придётся
-поправить руками, если имя сменится снова.
-
-## Три вещи, на которых это ломалось
-
-**По `VITE_STREAM_URL` лежит КАТАЛОГ, а не поток.** 4081 запись `#EXTINF` со
-ссылками на другие манифесты и ни одного `#EXT-X-STREAM-INF`. Первая версия
-отдавала этот адрес прямо в `hls.loadSource()` — играть там нечего, и экран не
-работал ни разу с первого дня. Разбирает его `features/stream/playlist.ts`, в
-плеер идёт адрес ВЫБРАННОГО канала.
-
-**Из 127 спортивных каналов 96 отдаются по `http://`.** Страница живёт на https,
-браузер режет смешанное содержимое — такой поток не загрузится ни через hls.js,
-ни через `video.src`, и правкой плеера это не лечится. Показываются только
-`https`, см. `isPlayable`.
-
-**Релей обязан отдавать `access-control-allow-origin` и gzip.** Без первого
-браузер выбрасывает ответ и экран пуст; без второго каталог весит 824 КБ вместо
-173 КБ. Оба замера сделаны на боевом релее — и оба были настоящими поломками.
-
-Каждый четвёртый канал не играет, и список «плохих» нельзя зашить в код: три из
-семи сломанных отдают манифест без CORS, то есть работают на iOS (нативный HLS)
-и не работают на Android (hls.js берёт манифест через XHR). Отсев — по факту
-отказа, см. `features/stream/order.ts`.
-
-## Смотреть вместе
-
-Голос и камера поверх эфира: комната на несколько человек, у каждого свой
-поток от источника. Панель стоит сразу под плеером.
+## Local development
+Requirements: Rust stable, Node 22+, npm, Docker.
 
 ```bash
-VITE_LIVEKIT_TOKEN_URL=https://<релей>/livekit-token   # не задан — панели нет вовсе
-VITE_LIVEKIT_ACCESS_TOKEN=…                            # если выдача закрыта секретом
+docker compose up -d postgres
+cargo test --workspace
+cargo run -p sherlock-api
+cd apps/web && npm install && npm run dev
 ```
 
-⚠️ **Сама трансляция через LiveKit НЕ передаётся.** По комнате идут только
-голос, картинка с камеры и одна строка «смотрим вот это»; канал у зрителя не
-переключается сам — ему предлагают перейти. Ретранслировать чужой эфир
-участникам значило бы раздавать чужой сигнал со своего сервера, чего это
-приложение не делает нигде: оно показывает каталог, а не вещает.
+API: `http://127.0.0.1:8080`. Configure `DATABASE_URL` and `VITE_API_URL` via environment variables.
 
-⚠️ **Код комнаты — это ключ от неё.** Проверить, кто стучится, релею нечем:
-подпись Telegram приходит только приложениям с сервером бота, а у этого его
-нет. Поэтому код генерируется случайным (десять символов из алфавита без
-похожих букв), а придумать свой приложение не предлагает нигде — ввести можно
-только чужой, полученный от друга.
+See [product concept](docs/PRODUCT_CONCEPT.md), [delivery map](docs/MAP.md) and [agent contract](AGENTS.md).
 
-⚠️ **Пропуск подписывает релей `stream-service`** из
-[`Aloews/sherlock-ai-bot`](https://github.com/Aloews/sherlock-ai-bot), тот же,
-что отдаёт каталог. Ключа LiveKit в этом приложении нет и быть не может: у
-него нет сервера. Права в пропуске узкие — войти, микрофон, камера, сообщения
-комнаты; ни администратора комнаты, ни демонстрации экрана.
-
-⚠️ **SDK грузится по нажатию.** `livekit-client` весит 586 КБ и лежит
-отдельным куском: зритель, который просто смотрит канал, за него не платит.
-`check-limits` печатает вес первого захода и догружаемое ОТДЕЛЬНЫМИ строками
-именно поэтому — сумма их двоих врала бы.
-
-## Полный каталог — за флагом сборки
-
-`VITE_SHOW_CATALOGUE=true` показывает все 4081 запись с причиной, по которой
-записи нет в плеере («не спорт» / «http»). Это для оператора, а не для зрителя:
-в каталоге больше 1400 фильмов и группа `♥18+` на 126 записей.
-
-⚠️ **Флаг сборки, а не проверка прав.** В игре каталог жил за `staffVerify` —
-проверкой пароля на сервере. Здесь сервера нет, и пароль на клиенте лежит в
-бандле. Поэтому выбор честный: публичная сборка каталога не содержит вовсе, и
-обходить нечего. Открывает его РОВНО строка `true`.
-
-## Проверки
-
-```bash
-npx tsc --noEmit
-npm run build
-npm test                    # 134 теста
-node scripts/check-i18n.mjs # 18 ключей × 9 языков
-node scripts/check-tests.mjs # отрицательные контроли: проверки обязаны замечать поломки
-```
-
-Интерфейс переведён на ru, en, es, pt, fr, ar, ja, ko, zh. Ключ добавляется во
-все девять файлов одним коммитом — `check-i18n` падает, если нет. `ar` —
-справа налево, `src/i18n/index.ts` выставляет `dir` на `<html>`.
-
-## Правовая сторона
-
-Приложение НЕ хранит и НЕ раздаёт видео: оно показывает список каналов из
-чужого публичного каталога и открывает поток по ссылке. Решение и его оговорки
-записаны в `docs/ADR-0004-live-tv-playlist-relay.md`.
-
-`VITE_STREAM_ABUSE_CONTACT` включает в интерфейсе ссылку «Пожаловаться
-правообладателю». Не задан — ссылки нет вовсе, а не мёртвый `mailto:undefined`.
-Быстрый рычаг на случай подтверждённой жалобы — убрать `VITE_STREAM_URL` и
-пересобрать: приложение честно скажет «эфир пока не настроен».
+A successful build is not product acceptance. Acceptance requires deterministic replay, invariants, PostgreSQL round-trip, API integration and real client journeys.
