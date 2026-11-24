@@ -1,0 +1,15 @@
+[package]
+name = "sherlock-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+serde.workspace = true
+sherlock-game-core = { path = "../game-core" }
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
