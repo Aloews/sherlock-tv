@@ -547,8 +547,11 @@ mod tests {
     fn replay_and_snapshot_round_trip_are_deterministic() {
         let mut a = world();
         let mut b = world();
-        a.settlements.get_mut("river-town").unwrap().population = 0;
-        b.settlements.get_mut("river-town").unwrap().population = 0;
+        for world in [&mut a, &mut b] {
+            for settlement in world.settlements.values_mut() {
+                settlement.population = 0;
+            }
+        }
         for _ in 0..4 {
             a.advance_tick().unwrap();
             b.advance_tick().unwrap();
