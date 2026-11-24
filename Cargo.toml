@@ -5,7 +5,7 @@ members = ["crates/world-kernel", "apps/server"]
 [workspace.package]
 edition = "2024"
 license = "AGPL-3.0-or-later"
-rust-version = "1.85"
+rust-version = "1.89"
 
 [workspace.dependencies]
 axum = { version = "0.8", features = ["form", "json"] }
