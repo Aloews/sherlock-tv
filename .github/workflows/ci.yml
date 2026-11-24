@@ -35,4 +35,4 @@ jobs:
       - name: Check browser client
         run: cargo check -p sherlock-web --target wasm32-unknown-unknown
       - name: Release build
-        run: cargo build --release --workspace
+        run: cargo build --release -p sherlock-api
