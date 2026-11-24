@@ -1,4 +1,4 @@
-import React,{useState} from "react";import{createRoot}from"react-dom/client";import"./style.css";
+import {StrictMode,useState} from "react";import{createRoot}from"react-dom/client";import"./style.css";
 type Settlement={id:string;name:string;population:number;treasury:number;inventory:Record<string,number>};
 type World={id:string;tick:number;seed:number;settlements:Record<string,Settlement>;resource_sites:Record<string,{name:string;stocks:Record<string,number>}>;events:{tick:number;cause:string;actor:string;payload:{type:string}}[]};
 function App(){
@@ -15,4 +15,4 @@ function App(){
  <h3>Летопись причин</h3>{w.events.slice(-12).reverse().map((e,i)=><div className="event" key={i}><small>ТАКТ {e.tick}</small><b>{e.cause}</b><span>{e.payload.type} · {e.actor}</span></div>)}</section>}
  <footer>СОСТОЯНИЕ ПОЛУЧЕНО ИЗ API · SHERLOCK</footer></main>
 }
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><App/></StrictMode>);
