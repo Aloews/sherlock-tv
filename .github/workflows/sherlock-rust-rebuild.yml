@@ -33,17 +33,21 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all
-      - name: Commit rustfmt changes
+      - run: cargo generate-lockfile
+      - name: Commit formatting and lockfile
         if: github.event_name == 'pull_request'
         env:
           TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          if ! git diff --quiet; then
+          if ! git diff --quiet || [ -f Cargo.lock ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add .
-            git commit -m "style: format Rust workspace"
-            git push origin "HEAD:${TARGET_BRANCH}"
+            if ! git diff --cached --quiet; then
+              git commit -m "build: format Rust workspace and pin dependency graph"
+              git push origin "HEAD:${TARGET_BRANCH}"
+            fi
           fi
+      - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
