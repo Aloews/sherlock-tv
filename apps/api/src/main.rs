@@ -1,6 +1,7 @@
-use axum::{extract::{Path, State}, http::StatusCode, routing::{get, post}, Json, Router};
-use sherlock_world_kernel::{EventPayload, Good, ProductionRecipe, Provenance, Settlement, World, WorldEvent};
+use axum::{extract::{Path, State}, http::{header, HeaderValue, Method, StatusCode}, routing::{get, post}, Json, Router};
+use sherlock_world_kernel::{Good, ProductionRecipe, Settlement, World};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
+use tower_http::cors::CorsLayer;
 use std::{collections::BTreeMap, sync::Arc};
 use uuid::Uuid;
 
@@ -15,6 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/worlds", post(create_world))
         .route("/api/worlds/{id}", get(read_world))
         .route("/api/worlds/{id}/advance", post(advance_world))
+        .layer(CorsLayer::new().allow_origin(["http://127.0.0.1:5173".parse::<HeaderValue>()?, "http://localhost:5173".parse::<HeaderValue>()?]).allow_methods([Method::GET, Method::POST]).allow_headers([header::CONTENT_TYPE]))
         .with_state(Arc::new(pool));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
     axum::serve(listener, app).await?;
@@ -54,11 +56,11 @@ async fn advance_world(State(db): State<Arc<PgPool>>, Path(id): Path<Uuid>) -> R
     sqlx::query("UPDATE worlds SET tick=$2,snapshot=$3,updated_at=now() WHERE id=$1")
         .bind(id).bind(i64::try_from(world.tick).map_err(|_| ApiError::BadRequest)?)
         .bind(serde_json::to_value(&world)?).execute(&mut *tx).await?;
-    for (offset, event) in world.events.iter().skip(old_len).enumerate() {
+    for event in world.events.iter().skip(old_len) {
         let sequence = i64::try_from(event.sequence).map_err(|_| ApiError::BadRequest)?;
         sqlx::query("INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,$2,$3,$4)")
             .bind(id).bind(i64::try_from(event.tick).map_err(|_| ApiError::BadRequest)?)
-            .bind(sequence + i64::try_from(offset).unwrap_or(0) * 0)
+            .bind(sequence)
             .bind(serde_json::to_value(event)?).execute(&mut *tx).await?;
     }
     tx.commit().await?;
@@ -78,5 +80,21 @@ impl axum::response::IntoResponse for ApiError {
             Self::Json(e) => (StatusCode::BAD_REQUEST, e.to_string()),
         };
         (status, Json(serde_json::json!({"error": message}))).into_response()
+    }
+}
+
+
+#[cfg(test)]
+mod integration_tests {
+    #[tokio::test]
+    async fn postgres_migrations_create_world_tables_when_database_is_configured() {
+        let Ok(url) = std::env::var("DATABASE_URL") else { return; };
+        let pool = sqlx::PgPool::connect(&url).await.expect("connect to CI PostgreSQL");
+        sqlx::migrate!("./migrations").run(&pool).await.expect("apply migrations");
+        let row = sqlx::query("SELECT to_regclass('public.worlds') IS NOT NULL AS worlds, to_regclass('public.world_events') IS NOT NULL AS events")
+            .fetch_one(&pool).await.expect("query migrated schema");
+        use sqlx::Row;
+        assert!(row.get::<bool, _>("worlds"));
+        assert!(row.get::<bool, _>("events"));
     }
 }
