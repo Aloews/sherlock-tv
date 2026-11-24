@@ -5,8 +5,8 @@ use axum::{
     Json, Router,
 };
 use sherlock_world_kernel::{
-    EventPayload, ExtractionCommand, Good, ProductionRecipe, Provenance, ResourceSite,
-    Settlement, SimulationError, TradeCommand, World, WorldEvent,
+    EventPayload, ExtractionCommand, Good, ProductionRecipe, Provenance, ResourceSite, Settlement,
+    SimulationError, TradeCommand, World, WorldEvent,
 };
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use std::{collections::BTreeMap, sync::Arc};
@@ -18,7 +18,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
     let url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://sherlock:sherlock@127.0.0.1:5432/sherlock".into());
-    let pool = PgPoolOptions::new().max_connections(10).connect(&url).await?;
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&url)
+        .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
@@ -153,11 +156,7 @@ async fn extract_resource(
     mutate_world(db, id, move |world| world.extract_resource(command)).await
 }
 
-async fn mutate_world<F>(
-    db: Arc<PgPool>,
-    id: Uuid,
-    command: F,
-) -> Result<Json<World>, ApiError>
+async fn mutate_world<F>(db: Arc<PgPool>, id: Uuid, command: F) -> Result<Json<World>, ApiError>
 where
     F: FnOnce(&mut World) -> Result<(), SimulationError>,
 {
@@ -179,15 +178,13 @@ where
         .await?;
 
     for event in world.events.iter().skip(old_len) {
-        sqlx::query(
-            "INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,$2,$3,$4)",
-        )
-        .bind(id)
-        .bind(i64::try_from(event.tick).map_err(|_| ApiError::BadRequest)?)
-        .bind(i64::try_from(event.sequence).map_err(|_| ApiError::BadRequest)?)
-        .bind(serde_json::to_value(event)?)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,$2,$3,$4)")
+            .bind(id)
+            .bind(i64::try_from(event.tick).map_err(|_| ApiError::BadRequest)?)
+            .bind(i64::try_from(event.sequence).map_err(|_| ApiError::BadRequest)?)
+            .bind(serde_json::to_value(event)?)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(Json(world))
