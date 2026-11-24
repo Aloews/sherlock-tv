@@ -5,7 +5,7 @@ on:
   push:
     branches: [rebuild/civilization-simulation-v1]
 permissions:
-  contents: read
+  contents: write
 jobs:
   rust:
     runs-on: ubuntu-latest
@@ -26,10 +26,24 @@ jobs:
       DATABASE_URL: postgres://sherlock:sherlock@localhost:5432/sherlock
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all
+      - name: Commit rustfmt changes
+        if: github.event_name == 'pull_request'
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "style: format Rust workspace"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          fi
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
