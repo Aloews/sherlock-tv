@@ -58,7 +58,11 @@ impl Dynasty {
         if self.members.contains_key(&person.id) {
             return Err(DynastyError::DuplicatePerson);
         }
-        if person.parent_ids.iter().any(|parent| !self.members.contains_key(parent)) {
+        if person
+            .parent_ids
+            .iter()
+            .any(|parent| !self.members.contains_key(parent))
+        {
             return Err(DynastyError::UnknownParent);
         }
         self.members.insert(person.id, person);
@@ -105,10 +109,16 @@ mod tests {
     fn succession_skips_deceased_members() {
         let founder = person(1, "Founder", vec![]);
         let mut dynasty = Dynasty::new(DynastyId(1), founder);
-        dynasty.members.get_mut(&PersonId(1)).expect("founder").is_alive = false;
-        dynasty.add_member(person(2, "Heir", vec![PersonId(1)]))
+        dynasty
+            .members
+            .get_mut(&PersonId(1))
+            .expect("founder")
+            .is_alive = false;
+        dynasty
+            .add_member(person(2, "Heir", vec![PersonId(1)]))
             .expect("add heir");
-        dynasty.set_succession_order(vec![PersonId(1), PersonId(2)])
+        dynasty
+            .set_succession_order(vec![PersonId(1), PersonId(2)])
             .expect("order");
 
         assert_eq!(
