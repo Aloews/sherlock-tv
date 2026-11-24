@@ -8,6 +8,8 @@ Football and other real-world industries are optional domains built on the same 
 
 The repository has been reset. This is the first clean-slate engineering foundation, not a finished game.
 
+The verification branch exercises the workspace checks without merging or deploying the application.
+
 ## Workspace
 
 - crates/domain — stable domain contracts, world identity, entities and causal events.
