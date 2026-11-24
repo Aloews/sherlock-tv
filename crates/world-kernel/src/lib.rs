@@ -56,6 +56,7 @@ pub enum Provenance { GeneratedSimulation, HistoricalSource { source_id: String 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventPayload {
+    WorldCreated,
     WorldAdvanced,
     GoodsProduced { settlement_id: String, good: Good, amount: u64 },
     FoodConsumed { settlement_id: String, amount: u64 },
