@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
-    Form, Json, Router,
+    Form, Router,
 };
 use maud::{html, Markup, DOCTYPE};
 use serde::Deserialize;
