@@ -131,18 +131,4 @@ impl WorldState {
         }
     }
 
-    pub fn register_entity(&mut self, kind: EntityKind, name: String) -> EntityId {
-        let id = EntityId::new();
-        self.entities.insert(
-            id,
-            EntityRecord {
-                id,
-                kind,
-                name,
-                created_at: self.tick,
-                attributes: BTreeMap::new(),
-            },
-        );
-        id
-    }
 }
