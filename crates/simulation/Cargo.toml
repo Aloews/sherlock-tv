@@ -11,3 +11,6 @@ rand_chacha.workspace = true
 sherlock-domain = { path = "../domain" }
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
