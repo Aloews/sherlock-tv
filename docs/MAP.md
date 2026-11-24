@@ -9,12 +9,15 @@ This branch replaces the previous MatchLive codebase with a clean project skelet
 ## W0 — executable foundation
 - [x] Product definition and architecture constraints.
 - [x] Clean Rust workspace and domain kernel.
-- [x] Basic deterministic tick with atomic failure behavior.
-- [x] PostgreSQL schema and API snapshot/event transaction boundary.
-- [x] Minimal API-backed web shell.
-- [x] CI definition for Rust, web and PostgreSQL service.
-- [ ] Verify exact-head CI and real PostgreSQL integration.
-- [ ] Independent replay, conservation and failure-injection tests.
+- [x] Deterministic tick with atomic failure behavior.
+- [x] Two settlements with population, inventories and production recipes.
+- [x] Resource sites and audited extraction commands.
+- [x] Bilateral trade with atomic goods/treasury transfer.
+- [x] Causal event envelope and provenance classification.
+- [x] PostgreSQL schema and transactional snapshot/event write path.
+- [x] API-backed web shell for tick, extraction and trade actions.
+- [ ] Verify exact-head CI and real PostgreSQL world round-trip.
+- [ ] Independent replay, conservation, ledger and failure-injection tests.
 
 ## W1 — material world
 - [ ] Resource-bearing locations, extraction and regeneration.
