@@ -32,12 +32,19 @@ async fn create_world(State(db): State<Arc<PgPool>>) -> Result<(StatusCode, Json
         production: vec![ProductionRecipe { id: "fishery".into(), output: Good::Food, output_amount: 25, inputs: BTreeMap::new() }],
     };
     let world = World { id, seed: 42, ruleset_version: 1, tick: 0,
-        settlements: [(settlement.id.clone(), settlement)].into_iter().collect(), events: vec![] };
+        settlements: [(settlement.id.clone(), settlement)].into_iter().collect(),
+        events: vec![sherlock_world_kernel::WorldEvent {
+            world_id: id, tick: 0, sequence: 0, actor: "scenario_initializer".into(),
+            cause: "scenario_start".into(), affected_entities: vec!["river-town".into()],
+            provenance: Provenance::GeneratedSimulation, ruleset_version: 1,
+            payload: EventPayload::WorldCreated,
+        }],
+    };
     let mut tx = db.begin().await?;
     sqlx::query("INSERT INTO worlds (id,tick,snapshot) VALUES ($1,0,$2)")
         .bind(id).bind(serde_json::to_value(&world)?).execute(&mut *tx).await?;
     sqlx::query("INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,0,0,$2)")
-        .bind(id).bind(serde_json::json!({"kind":"world_created","provenance":"generated_simulation"})).execute(&mut *tx).await?;
+        .bind(id).bind(serde_json::to_value(&world.events[0])?).execute(&mut *tx).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(world)))
 }
