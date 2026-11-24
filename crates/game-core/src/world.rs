@@ -58,16 +58,16 @@ pub enum Provenance {
 pub enum EventPayload {
     WorldCreated,
     TickAdvanced,
-    EntityRegistered { entity_id: EntityId, kind: EntityKind },
-    PopulationChanged { settlement_id: EntityId, delta: i64, reason: String },
-    ResourceStockChanged { site_id: EntityId, resource: String, delta: i64 },
-    ProductionCompleted { organization_id: EntityId, good: String, quantity: u64 },
-    TradeSettled { buyer_id: EntityId, seller_id: EntityId, good: String, quantity: u64 },
-    CreditChanged { lender_id: EntityId, borrower_id: EntityId, delta_minor_units: i64 },
-    InstitutionChanged { institution_id: EntityId, change: String },
-    PowerChanged { from_entity: EntityId, to_entity: EntityId, authority: String },
-    CultureChanged { group_id: EntityId, change: String },
-    Custom { domain: String, event_type: String, payload: serde_json::Value },
+    EntityRegistered {\n        entity_id: EntityId,\n        kind: EntityKind,\n    },
+    PopulationChanged {\n        settlement_id: EntityId,\n        delta: i64,\n        reason: String,\n    },
+    ResourceStockChanged {\n        site_id: EntityId,\n        resource: String,\n        delta: i64,\n    },
+    ProductionCompleted {\n        organization_id: EntityId,\n        good: String,\n        quantity: u64,\n    },
+    TradeSettled {\n        buyer_id: EntityId,\n        seller_id: EntityId,\n        good: String,\n        quantity: u64,\n    },
+    CreditChanged {\n        lender_id: EntityId,\n        borrower_id: EntityId,\n        delta_minor_units: i64,\n    },
+    InstitutionChanged {\n        institution_id: EntityId,\n        change: String,\n    },
+    PowerChanged {\n        from_entity: EntityId,\n        to_entity: EntityId,\n        authority: String,\n    },
+    CultureChanged {\n        group_id: EntityId,\n        change: String,\n    },
+    Custom {\n        domain: String,\n        event_type: String,\n        payload: serde_json::Value,\n    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
