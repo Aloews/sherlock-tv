@@ -31,7 +31,7 @@ pub struct SystemError {
 
 impl SystemError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {\n            message: message.into(),\n        }
     }
 }
 
@@ -63,7 +63,10 @@ impl SimulationEngine {
         world: &mut WorldState,
     ) -> Result<Vec<EventEnvelope>, SimulationError> {
         let mut candidate = world.clone();
-        let next_tick = candidate.tick.checked_next().ok_or(SimulationError::TickOverflow)?;
+        let next_tick = candidate
+            .tick
+            .checked_next()
+            .ok_or(SimulationError::TickOverflow)?;
         let mut drafts = Vec::new();
 
         for system in &self.systems {
@@ -117,9 +120,11 @@ impl SimulationEngine {
 }
 
 fn seed_for_system(seed: u64, tick: Tick, ruleset_version: u32, system_id: &str) -> u64 {
-    let stable_system_hash = system_id.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-    });
+    let stable_system_hash = system_id
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
     let mut value = seed
         ^ tick.0.rotate_left(17)
         ^ u64::from(ruleset_version).rotate_left(41)
@@ -186,7 +191,9 @@ mod tests {
     fn tick_advances_and_emits_ordered_tick_event() {
         let engine = SimulationEngine::new(vec![]);
         let mut world = WorldState::new(7, 1);
-        let events = engine.advance_tick(&mut world).expect("tick should succeed");
+        let events = engine
+            .advance_tick(&mut world)
+            .expect("tick should succeed");
 
         assert_eq!(world.tick, Tick(1));
         assert_eq!(events.len(), 1);
@@ -264,7 +271,10 @@ mod tests {
         world.tick = Tick(u64::MAX);
         let before = world.clone();
 
-        assert_eq!(engine.advance_tick(&mut world), Err(SimulationError::TickOverflow));
+        assert_eq!(
+            engine.advance_tick(&mut world),
+            Err(SimulationError::TickOverflow)
+        );
         assert_eq!(world, before);
     }
 }
