@@ -5,7 +5,12 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Good { Food, Timber, Stone, Iron }
+pub enum Good {
+    Food,
+    Timber,
+    Stone,
+    Iron,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProductionRecipe {
@@ -51,15 +56,27 @@ pub struct WorldEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Provenance { GeneratedSimulation, HistoricalSource { source_id: String }, DerivedEstimate { method: String }, ModelAssumption { assumption_id: String } }
+pub enum Provenance {
+    GeneratedSimulation,
+    HistoricalSource { source_id: String },
+    DerivedEstimate { method: String },
+    ModelAssumption { assumption_id: String },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventPayload {
     WorldCreated,
     WorldAdvanced,
-    GoodsProduced { settlement_id: String, good: Good, amount: u64 },
-    FoodConsumed { settlement_id: String, amount: u64 },
+    GoodsProduced {
+        settlement_id: String,
+        good: Good,
+        amount: u64,
+    },
+    FoodConsumed {
+        settlement_id: String,
+        amount: u64,
+    },
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -69,7 +86,11 @@ pub enum SimulationError {
     #[error("inventory arithmetic overflow in {0}")]
     InventoryOverflow(String),
     #[error("food shortage in {settlement_id}: required {required}, available {available}")]
-    FoodShortage { settlement_id: String, required: u64, available: u64 },
+    FoodShortage {
+        settlement_id: String,
+        required: u64,
+        available: u64,
+    },
     #[error("input shortage in {settlement_id} for {good:?}")]
     InputShortage { settlement_id: String, good: Good },
 }
@@ -77,52 +98,99 @@ pub enum SimulationError {
 impl World {
     pub fn advance_tick(&mut self) -> Result<(), SimulationError> {
         let mut next = self.clone();
-        let tick = next.tick.checked_add(1).ok_or(SimulationError::TickOverflow)?;
+        let tick = next
+            .tick
+            .checked_add(1)
+            .ok_or(SimulationError::TickOverflow)?;
         let mut changes = Vec::new();
 
         for settlement in next.settlements.values_mut() {
             for recipe in &settlement.production {
                 for (good, amount) in &recipe.inputs {
                     if settlement.inventory.get(good).copied().unwrap_or(0) < *amount {
-                        return Err(SimulationError::InputShortage { settlement_id: settlement.id.clone(), good: *good });
+                        return Err(SimulationError::InputShortage {
+                            settlement_id: settlement.id.clone(),
+                            good: *good,
+                        });
                     }
                 }
                 for (good, amount) in &recipe.inputs {
                     *settlement.inventory.entry(*good).or_default() -= *amount;
                 }
                 let stock = settlement.inventory.entry(recipe.output).or_default();
-                *stock = stock.checked_add(recipe.output_amount).ok_or_else(|| SimulationError::InventoryOverflow(settlement.id.clone()))?;
-                changes.push((settlement.id.clone(), recipe.output, recipe.output_amount, recipe.id.clone(), false));
+                *stock = stock
+                    .checked_add(recipe.output_amount)
+                    .ok_or_else(|| SimulationError::InventoryOverflow(settlement.id.clone()))?;
+                changes.push((
+                    settlement.id.clone(),
+                    recipe.output,
+                    recipe.output_amount,
+                    recipe.id.clone(),
+                    false,
+                ));
             }
-            let required = settlement.population.checked_mul(settlement.food_per_person_per_tick)
+            let required = settlement
+                .population
+                .checked_mul(settlement.food_per_person_per_tick)
                 .ok_or_else(|| SimulationError::InventoryOverflow(settlement.id.clone()))?;
             let available = settlement.inventory.get(&Good::Food).copied().unwrap_or(0);
             if available < required {
-                return Err(SimulationError::FoodShortage { settlement_id: settlement.id.clone(), required, available });
+                return Err(SimulationError::FoodShortage {
+                    settlement_id: settlement.id.clone(),
+                    required,
+                    available,
+                });
             }
             *settlement.inventory.entry(Good::Food).or_default() -= required;
-            if required > 0 { changes.push((settlement.id.clone(), Good::Food, required, "population_consumption".into(), true)); }
+            if required > 0 {
+                changes.push((
+                    settlement.id.clone(),
+                    Good::Food,
+                    required,
+                    "population_consumption".into(),
+                    true,
+                ));
+            }
         }
 
         next.tick = tick;
         let mut sequence = next.events.len() as u64;
         for (settlement_id, good, amount, cause, consumption) in changes {
             let payload = if consumption {
-                EventPayload::FoodConsumed { settlement_id: settlement_id.clone(), amount }
+                EventPayload::FoodConsumed {
+                    settlement_id: settlement_id.clone(),
+                    amount,
+                }
             } else {
-                EventPayload::GoodsProduced { settlement_id: settlement_id.clone(), good, amount }
+                EventPayload::GoodsProduced {
+                    settlement_id: settlement_id.clone(),
+                    good,
+                    amount,
+                }
             };
             next.events.push(WorldEvent {
-                world_id: next.id, tick, sequence, actor: "world_simulation".into(), cause,
-                affected_entities: vec![settlement_id], provenance: Provenance::GeneratedSimulation,
-                ruleset_version: next.ruleset_version, payload,
+                world_id: next.id,
+                tick,
+                sequence,
+                actor: "world_simulation".into(),
+                cause,
+                affected_entities: vec![settlement_id],
+                provenance: Provenance::GeneratedSimulation,
+                ruleset_version: next.ruleset_version,
+                payload,
             });
             sequence += 1;
         }
         next.events.push(WorldEvent {
-            world_id: next.id, tick, sequence, actor: "world_simulation".into(), cause: "scheduled_tick".into(),
-            affected_entities: vec![], provenance: Provenance::GeneratedSimulation,
-            ruleset_version: next.ruleset_version, payload: EventPayload::WorldAdvanced,
+            world_id: next.id,
+            tick,
+            sequence,
+            actor: "world_simulation".into(),
+            cause: "scheduled_tick".into(),
+            affected_entities: vec![],
+            provenance: Provenance::GeneratedSimulation,
+            ruleset_version: next.ruleset_version,
+            payload: EventPayload::WorldAdvanced,
         });
         *self = next;
         Ok(())
@@ -134,23 +202,52 @@ mod tests {
     use super::*;
     fn world() -> World {
         let town = Settlement {
-            id: "river-town".into(), name: "River Town".into(), population: 100, treasury: 500,
-            inventory: [(Good::Food, 200), (Good::Timber, 20)].into_iter().collect(),
+            id: "river-town".into(),
+            name: "River Town".into(),
+            population: 100,
+            treasury: 500,
+            inventory: [(Good::Food, 200), (Good::Timber, 20)]
+                .into_iter()
+                .collect(),
             food_per_person_per_tick: 1,
-            production: vec![ProductionRecipe { id: "fishery".into(), output: Good::Food, output_amount: 30, inputs: BTreeMap::new() }],
+            production: vec![ProductionRecipe {
+                id: "fishery".into(),
+                output: Good::Food,
+                output_amount: 30,
+                inputs: BTreeMap::new(),
+            }],
         };
-        World { id: Uuid::nil(), seed: 42, ruleset_version: 1, tick: 0,
-            settlements: [(town.id.clone(), town)].into_iter().collect(), events: vec![] }
+        World {
+            id: Uuid::nil(),
+            seed: 42,
+            ruleset_version: 1,
+            tick: 0,
+            settlements: [(town.id.clone(), town)].into_iter().collect(),
+            events: vec![],
+        }
     }
-    #[test] fn tick_produces_consumes_and_records_events() {
-        let mut w = world(); w.advance_tick().unwrap();
+    #[test]
+    fn tick_produces_consumes_and_records_events() {
+        let mut w = world();
+        w.advance_tick().unwrap();
         assert_eq!(w.settlements["river-town"].inventory[&Good::Food], 130);
         assert_eq!(w.tick, 1);
-        assert!(w.events.iter().any(|e| matches!(e.payload, EventPayload::FoodConsumed { amount: 100, .. })));
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::FoodConsumed { amount: 100, .. })));
     }
-    #[test] fn failed_tick_is_atomic() {
-        let mut w = world(); w.settlements.get_mut("river-town").unwrap().inventory.insert(Good::Food, 0);
-        let before = w.clone(); assert!(w.advance_tick().is_err()); assert_eq!(w, before);
+    #[test]
+    fn failed_tick_is_atomic() {
+        let mut w = world();
+        w.settlements
+            .get_mut("river-town")
+            .unwrap()
+            .inventory
+            .insert(Good::Food, 0);
+        let before = w.clone();
+        assert!(w.advance_tick().is_err());
+        assert_eq!(w, before);
     }
     #[test]
     fn snapshot_json_round_trip_preserves_world() {
@@ -160,7 +257,8 @@ mod tests {
         assert_eq!(original, restored);
     }
 
-    #[test] fn replay_is_deterministic() {
+    #[test]
+    fn replay_is_deterministic() {
         let mut a = world();
         let mut b = world();
         a.settlements.get_mut("river-town").unwrap().population = 0;
