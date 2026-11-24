@@ -161,6 +161,7 @@ impl World {
         let mut next = self.clone();
         let new_tick = next.tick.checked_add(1).ok_or(SimulationError::TickOverflow)?;
         let settlement_ids: Vec<String> = next.settlements.keys().cloned().collect();
+        let mut pending = Vec::new();
 
         for id in settlement_ids {
             let settlement = next.settlements.get_mut(&id).expect("id collected from map");
@@ -177,20 +178,14 @@ impl World {
                 let output = settlement.inventory.entry(recipe.output).or_default();
                 *output = output.checked_add(recipe.output_amount)
                     .ok_or_else(|| SimulationError::InventoryOverflow(id.clone()))?;
-                next.events.push(WorldEvent {
-                    world_id: next.id,
-                    tick: new_tick,
-                    sequence: next.next_sequence()?,
-                    actor: "simulation".into(),
-                    cause: format!("production:{}", recipe.id),
-                    affected_entities: vec![id.clone()],
-                    provenance: Provenance::GeneratedSimulation,
-                    ruleset_version: next.ruleset_version,
-                    payload: EventPayload::GoodsProduced {
+                pending.push((
+                    format!("production:{}", recipe.id),
+                    vec![id.clone()],
+                    EventPayload::GoodsProduced {
                         settlement_id: id.clone(), good: recipe.output,
                         amount: recipe.output_amount, recipe_id: recipe.id.clone(),
                     },
-                });
+                ));
             }
             let required = settlement.population.checked_mul(settlement.food_per_person_per_tick)
                 .ok_or_else(|| SimulationError::InventoryOverflow(id.clone()))?;
@@ -200,20 +195,17 @@ impl World {
             }
             *settlement.inventory.entry(Good::Food).or_default() -= required;
             if required > 0 {
-                next.events.push(WorldEvent {
-                    world_id: next.id,
-                    tick: new_tick,
-                    sequence: next.next_sequence()?,
-                    actor: "population".into(),
-                    cause: "daily_consumption".into(),
-                    affected_entities: vec![id.clone()],
-                    provenance: Provenance::GeneratedSimulation,
-                    ruleset_version: next.ruleset_version,
-                    payload: EventPayload::FoodConsumed { settlement_id: id, amount: required },
-                });
+                pending.push((
+                    "daily_consumption".into(),
+                    vec![id.clone()],
+                    EventPayload::FoodConsumed { settlement_id: id, amount: required },
+                ));
             }
         }
         next.tick = new_tick;
+        for (cause, affected, payload) in pending {
+            next.record("simulation", cause, affected, payload)?;
+        }
         next.record("simulation", "scheduled_tick", vec![], EventPayload::TickAdvanced)?;
         *self = next;
         Ok(())
