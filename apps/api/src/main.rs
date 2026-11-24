@@ -1,5 +1,5 @@
 use axum::{extract::{Path, State}, http::{header, HeaderValue, Method, StatusCode}, routing::{get, post}, Json, Router};
-use sherlock_world_kernel::{Good, ProductionRecipe, Settlement, World};
+use sherlock_world_kernel::{EventPayload, Good, ProductionRecipe, Provenance, Settlement, World, WorldEvent};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use tower_http::cors::CorsLayer;
 use std::{collections::BTreeMap, sync::Arc};
@@ -33,7 +33,7 @@ async fn create_world(State(db): State<Arc<PgPool>>) -> Result<(StatusCode, Json
     };
     let world = World { id, seed: 42, ruleset_version: 1, tick: 0,
         settlements: [(settlement.id.clone(), settlement)].into_iter().collect(),
-        events: vec![sherlock_world_kernel::WorldEvent {
+        events: vec![WorldEvent {
             world_id: id, tick: 0, sequence: 0, actor: "scenario_initializer".into(),
             cause: "scenario_start".into(), affected_entities: vec!["river-town".into()],
             provenance: Provenance::GeneratedSimulation, ruleset_version: 1,
