@@ -64,14 +64,17 @@ impl SimulationEngine {
     ) -> Result<Vec<EventEnvelope>, SimulationError> {
         let mut candidate = world.clone();
         let next_tick = candidate.tick.checked_next().ok_or(SimulationError::TickOverflow)?;
-        let mut random = ChaCha8Rng::seed_from_u64(seed_for_tick(
-            candidate.seed,
-            next_tick,
-            candidate.ruleset_version,
-        ));
+        let world_seed = candidate.seed;
+        let ruleset_version = candidate.ruleset_version;
         let mut drafts = Vec::new();
 
         for system in &self.systems {
+            let mut random = ChaCha8Rng::seed_from_u64(seed_for_system(
+                world_seed,
+                next_tick,
+                ruleset_version,
+                system.id(),
+            ));
             let system_drafts = system
                 .advance(&mut candidate, next_tick, &mut random)
                 .map_err(|source| SimulationError::System {
@@ -97,7 +100,10 @@ impl SimulationEngine {
                 .checked_add(1)
                 .ok_or(SimulationError::EventSequenceOverflow)?;
             events.push(EventEnvelope {
-                event_id: uuid::Uuid::new_v4(),
+                event_id: uuid::Uuid::new_v5(
+                    &candidate.id.0,
+                    format!("{}:{sequence}", next_tick.0).as_bytes(),
+                ),
                 world_id: candidate.id,
                 tick: next_tick,
                 sequence,
@@ -115,8 +121,14 @@ impl SimulationEngine {
     }
 }
 
-fn seed_for_tick(seed: u64, tick: Tick, ruleset_version: u32) -> u64 {
-    let mut value = seed ^ tick.0.rotate_left(17) ^ u64::from(ruleset_version).rotate_left(41);
+fn seed_for_system(seed: u64, tick: Tick, ruleset_version: u32, system_id: &str) -> u64 {
+    let stable_system_hash = system_id.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    let mut value = seed
+        ^ tick.0.rotate_left(17)
+        ^ u64::from(ruleset_version).rotate_left(41)
+        ^ stable_system_hash;
     value ^= value >> 30;
     value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
     value ^= value >> 27;
@@ -142,11 +154,11 @@ mod tests {
             _tick: Tick,
             random: &mut dyn RngCore,
         ) -> Result<Vec<EventDraft>, SystemError> {
-            let amount = random.next_u32() as u64;
+            let amount = u64::from(random.next_u32());
             Ok(vec![EventDraft {
                 actor: "test-system".into(),
                 cause: "test-draw".into(),
-                affected_entities: vec![EntityId::default()],
+                affected_entities: vec![EntityId(uuid::Uuid::nil())],
                 provenance: Provenance::GeneratedSimulation,
                 payload: EventPayload::Custom {
                     domain: "test".into(),
