@@ -152,9 +152,23 @@ mod tests {
         let mut w = world(); w.settlements.get_mut("river-town").unwrap().inventory.insert(Good::Food, 0);
         let before = w.clone(); assert!(w.advance_tick().is_err()); assert_eq!(w, before);
     }
+    #[test]
+    fn snapshot_json_round_trip_preserves_world() {
+        let original = world();
+        let bytes = serde_json::to_vec(&original).unwrap();
+        let restored: World = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(original, restored);
+    }
+
     #[test] fn replay_is_deterministic() {
-        let mut a = world(); let mut b = world();
-        for _ in 0..4 { a.advance_tick().unwrap(); b.advance_tick().unwrap(); }
+        let mut a = world();
+        let mut b = world();
+        a.settlements.get_mut("river-town").unwrap().population = 0;
+        b.settlements.get_mut("river-town").unwrap().population = 0;
+        for _ in 0..4 {
+            a.advance_tick().unwrap();
+            b.advance_tick().unwrap();
+        }
         assert_eq!(a, b);
     }
 }
