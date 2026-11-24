@@ -223,6 +223,19 @@ mod tests {
     }
 
     #[test]
+    fn replay_from_the_same_snapshot_produces_identical_events_and_state() {
+        let engine = SimulationEngine::new(vec![Box::new(RandomEventSystem)]);
+        let mut original = WorldState::new(9876, 1);
+        let mut replay = original.clone();
+
+        let original_events = engine.advance_tick(&mut original).expect("original tick");
+        let replay_events = engine.advance_tick(&mut replay).expect("replay tick");
+
+        assert_eq!(original_events, replay_events);
+        assert_eq!(original, replay);
+    }
+
+    #[test]
     fn systems_execute_in_stable_identifier_order() {
         struct NamedSystem(&'static str);
 
