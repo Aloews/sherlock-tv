@@ -106,10 +106,15 @@ mod tests {
         let founder = person(1, "Founder", vec![]);
         let mut dynasty = Dynasty::new(DynastyId(1), founder);
         dynasty.members.get_mut(&PersonId(1)).expect("founder").is_alive = false;
-        dynasty.add_member(person(2, "Heir", vec![PersonId(1)])).expect("add heir");
-        dynasty.set_succession_order(vec![PersonId(1), PersonId(2)]).expect("order");
+        dynasty.add_member(person(2, "Heir", vec![PersonId(1)]))
+            .expect("add heir");
+        dynasty.set_succession_order(vec![PersonId(1), PersonId(2)])
+            .expect("order");
 
-        assert_eq!(dynasty.successor().map(|person| person.id), Some(PersonId(2)));
+        assert_eq!(
+            dynasty.successor().map(|person| person.id),
+            Some(PersonId(2))
+        );
     }
 
     #[test]
