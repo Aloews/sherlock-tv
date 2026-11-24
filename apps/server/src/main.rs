@@ -369,7 +369,14 @@ impl IntoResponse for AppError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Ошибка сериализации состояния".into())
             }
         };
-        (status, Html(layout(html! { section class="hero" { h1 { "Ошибка" } p { (message) } a href="/" { "На главную" } }))),).into_response()
+        let body = html! {
+            section class="hero" {
+                h1 { "Ошибка" }
+                p { (message) }
+                a href="/" { "На главную" }
+            }
+        };
+        (status, Html(layout(body))).into_response()
     }
 }
 
