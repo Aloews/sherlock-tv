@@ -5,7 +5,8 @@ use axum::{
     Json, Router,
 };
 use sherlock_world_kernel::{
-    EventPayload, Good, ProductionRecipe, Provenance, Settlement, World, WorldEvent,
+    EventPayload, ExtractionCommand, Good, ProductionRecipe, Provenance, ResourceSite,
+    Settlement, SimulationError, TradeCommand, World, WorldEvent,
 };
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use std::{collections::BTreeMap, sync::Arc};
@@ -17,16 +18,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
     let url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://sherlock:sherlock@127.0.0.1:5432/sherlock".into());
-    let pool = PgPoolOptions::new()
-        .max_connections(10)
-        .connect(&url)
-        .await?;
+    let pool = PgPoolOptions::new().max_connections(10).connect(&url).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/api/worlds", post(create_world))
         .route("/api/worlds/{id}", get(read_world))
         .route("/api/worlds/{id}/advance", post(advance_world))
+        .route("/api/worlds/{id}/trade", post(trade_world))
+        .route("/api/worlds/{id}/extract", post(extract_resource))
         .layer(
             CorsLayer::new()
                 .allow_origin([
@@ -46,11 +46,11 @@ async fn create_world(
     State(db): State<Arc<PgPool>>,
 ) -> Result<(StatusCode, Json<World>), ApiError> {
     let id = Uuid::new_v4();
-    let settlement = Settlement {
+    let river = Settlement {
         id: "river-town".into(),
         name: "River Town".into(),
         population: 100,
-        treasury: 1000,
+        treasury: 1_000,
         inventory: [(Good::Food, 500), (Good::Timber, 50)]
             .into_iter()
             .collect::<BTreeMap<_, _>>(),
@@ -62,19 +62,42 @@ async fn create_world(
             inputs: BTreeMap::new(),
         }],
     };
+    let hill = Settlement {
+        id: "hill-village".into(),
+        name: "Hill Village".into(),
+        population: 40,
+        treasury: 100,
+        inventory: [(Good::Food, 250), (Good::Stone, 10), (Good::Timber, 15)]
+            .into_iter()
+            .collect(),
+        food_per_person_per_tick: 1,
+        production: vec![],
+    };
+    let quarry = ResourceSite {
+        id: "stone-quarry".into(),
+        name: "Stone Quarry".into(),
+        stocks: [(Good::Stone, 1_000)].into_iter().collect(),
+    };
     let world = World {
         id,
         seed: 42,
         ruleset_version: 1,
         tick: 0,
-        settlements: [(settlement.id.clone(), settlement)].into_iter().collect(),
+        settlements: [(river.id.clone(), river), (hill.id.clone(), hill)]
+            .into_iter()
+            .collect(),
+        resource_sites: [(quarry.id.clone(), quarry)].into_iter().collect(),
         events: vec![WorldEvent {
             world_id: id,
             tick: 0,
             sequence: 0,
             actor: "scenario_initializer".into(),
             cause: "scenario_start".into(),
-            affected_entities: vec!["river-town".into()],
+            affected_entities: vec![
+                "river-town".into(),
+                "hill-village".into(),
+                "stone-quarry".into(),
+            ],
             provenance: Provenance::GeneratedSimulation,
             ruleset_version: 1,
             payload: EventPayload::WorldCreated,
@@ -111,6 +134,33 @@ async fn advance_world(
     State(db): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<World>, ApiError> {
+    mutate_world(db, id, |world| world.advance_tick()).await
+}
+
+async fn trade_world(
+    State(db): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(command): Json<TradeCommand>,
+) -> Result<Json<World>, ApiError> {
+    mutate_world(db, id, move |world| world.execute_trade(command)).await
+}
+
+async fn extract_resource(
+    State(db): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(command): Json<ExtractionCommand>,
+) -> Result<Json<World>, ApiError> {
+    mutate_world(db, id, move |world| world.extract_resource(command)).await
+}
+
+async fn mutate_world<F>(
+    db: Arc<PgPool>,
+    id: Uuid,
+    command: F,
+) -> Result<Json<World>, ApiError>
+where
+    F: FnOnce(&mut World) -> Result<(), SimulationError>,
+{
     let mut tx = db.begin().await?;
     let row = sqlx::query("SELECT snapshot FROM worlds WHERE id=$1 FOR UPDATE")
         .bind(id)
@@ -119,24 +169,25 @@ async fn advance_world(
         .ok_or(ApiError::NotFound)?;
     let mut world: World = serde_json::from_value(row.try_get("snapshot")?)?;
     let old_len = world.events.len();
-    world
-        .advance_tick()
-        .map_err(|e| ApiError::Simulation(e.to_string()))?;
+    command(&mut world).map_err(|error| ApiError::Simulation(error.to_string()))?;
+
     sqlx::query("UPDATE worlds SET tick=$2,snapshot=$3,updated_at=now() WHERE id=$1")
         .bind(id)
         .bind(i64::try_from(world.tick).map_err(|_| ApiError::BadRequest)?)
         .bind(serde_json::to_value(&world)?)
         .execute(&mut *tx)
         .await?;
+
     for event in world.events.iter().skip(old_len) {
-        let sequence = i64::try_from(event.sequence).map_err(|_| ApiError::BadRequest)?;
-        sqlx::query("INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,$2,$3,$4)")
-            .bind(id)
-            .bind(i64::try_from(event.tick).map_err(|_| ApiError::BadRequest)?)
-            .bind(sequence)
-            .bind(serde_json::to_value(event)?)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO world_events (world_id,tick,sequence,event) VALUES ($1,$2,$3,$4)",
+        )
+        .bind(id)
+        .bind(i64::try_from(event.tick).map_err(|_| ApiError::BadRequest)?)
+        .bind(i64::try_from(event.sequence).map_err(|_| ApiError::BadRequest)?)
+        .bind(serde_json::to_value(event)?)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(world))
@@ -149,14 +200,15 @@ enum ApiError {
     Db(sqlx::Error),
     Json(serde_json::Error),
 }
+
 impl From<sqlx::Error> for ApiError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::Db(e)
+    fn from(error: sqlx::Error) -> Self {
+        Self::Db(error)
     }
 }
 impl From<serde_json::Error> for ApiError {
-    fn from(e: serde_json::Error) -> Self {
-        Self::Json(e)
+    fn from(error: serde_json::Error) -> Self {
+        Self::Json(error)
     }
 }
 impl axum::response::IntoResponse for ApiError {
@@ -164,11 +216,11 @@ impl axum::response::IntoResponse for ApiError {
         let (status, message) = match self {
             Self::NotFound => (StatusCode::NOT_FOUND, "world not found".into()),
             Self::BadRequest => (StatusCode::BAD_REQUEST, "numeric value out of range".into()),
-            Self::Simulation(e) => (StatusCode::UNPROCESSABLE_ENTITY, e),
-            Self::Db(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            Self::Json(e) => (StatusCode::BAD_REQUEST, e.to_string()),
+            Self::Simulation(error) => (StatusCode::UNPROCESSABLE_ENTITY, error),
+            Self::Db(error) => (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+            Self::Json(error) => (StatusCode::BAD_REQUEST, error.to_string()),
         };
-        (status, Json(serde_json::json!({"error": message}))).into_response()
+        (status, Json(serde_json::json!({ "error": message }))).into_response()
     }
 }
 
@@ -186,8 +238,12 @@ mod integration_tests {
             .run(&pool)
             .await
             .expect("apply migrations");
-        let row = sqlx::query("SELECT to_regclass('public.worlds') IS NOT NULL AS worlds, to_regclass('public.world_events') IS NOT NULL AS events")
-            .fetch_one(&pool).await.expect("query migrated schema");
+        let row = sqlx::query(
+            "SELECT to_regclass('public.worlds') IS NOT NULL AS worlds, to_regclass('public.world_events') IS NOT NULL AS events",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("query migrated schema");
         use sqlx::Row;
         assert!(row.get::<bool, _>("worlds"));
         assert!(row.get::<bool, _>("events"));
