@@ -27,7 +27,7 @@ jobs:
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
-  postgres:
+  postgres-migration:
     runs-on: ubuntu-latest
     services:
       postgres:
