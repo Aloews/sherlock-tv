@@ -139,7 +139,7 @@ fn seed_for_system(seed: u64, tick: Tick, ruleset_version: u32, system_id: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sherlock_domain::{EntityId, EntityKind, EventPayload, Provenance, WorldState};
+    use sherlock_domain::{EntityId, EventPayload, Provenance, WorldState};
 
     struct RandomEventSystem;
 
@@ -182,7 +182,7 @@ mod tests {
             _tick: Tick,
             _random: &mut dyn RngCore,
         ) -> Result<Vec<EventDraft>, SystemError> {
-            world.register_entity(EntityKind::Person, "must roll back".into());
+            world.tick = Tick(999);
             Err(SystemError::new("deliberate test failure"))
         }
     }
