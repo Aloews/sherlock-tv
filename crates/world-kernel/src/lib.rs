@@ -76,10 +76,28 @@ pub enum Provenance {
 pub enum EventPayload {
     WorldCreated,
     WorldAdvanced,
-    GoodsProduced { settlement_id: String, good: Good, amount: u64 },
-    FoodConsumed { settlement_id: String, amount: u64 },
-    ResourceExtracted { site_id: String, settlement_id: String, good: Good, amount: u64 },
-    TradeExecuted { seller_id: String, buyer_id: String, good: Good, quantity: u64, total_price: i64 },
+    GoodsProduced {
+        settlement_id: String,
+        good: Good,
+        amount: u64,
+    },
+    FoodConsumed {
+        settlement_id: String,
+        amount: u64,
+    },
+    ResourceExtracted {
+        site_id: String,
+        settlement_id: String,
+        good: Good,
+        amount: u64,
+    },
+    TradeExecuted {
+        seller_id: String,
+        buyer_id: String,
+        good: Good,
+        quantity: u64,
+        total_price: i64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,19 +128,39 @@ pub enum SimulationError {
     #[error("treasury arithmetic overflow in {0}")]
     TreasuryOverflow(String),
     #[error("food shortage in {settlement_id}: required {required}, available {available}")]
-    FoodShortage { settlement_id: String, required: u64, available: u64 },
+    FoodShortage {
+        settlement_id: String,
+        required: u64,
+        available: u64,
+    },
     #[error("input shortage in {settlement_id} for {good:?}")]
     InputShortage { settlement_id: String, good: Good },
     #[error("unknown settlement: {0}")]
     UnknownSettlement(String),
     #[error("unknown resource site: {0}")]
     UnknownResourceSite(String),
-    #[error("insufficient resource stock at {site_id}: requested {requested}, available {available}")]
-    InsufficientResource { site_id: String, requested: u64, available: u64 },
+    #[error(
+        "insufficient resource stock at {site_id}: requested {requested}, available {available}"
+    )]
+    InsufficientResource {
+        site_id: String,
+        requested: u64,
+        available: u64,
+    },
     #[error("insufficient goods in {settlement_id}: requested {requested}, available {available}")]
-    InsufficientGoods { settlement_id: String, requested: u64, available: u64 },
-    #[error("insufficient treasury in {settlement_id}: required {required}, available {available}")]
-    InsufficientFunds { settlement_id: String, required: i64, available: i64 },
+    InsufficientGoods {
+        settlement_id: String,
+        requested: u64,
+        available: u64,
+    },
+    #[error(
+        "insufficient treasury in {settlement_id}: required {required}, available {available}"
+    )]
+    InsufficientFunds {
+        settlement_id: String,
+        required: i64,
+        available: i64,
+    },
     #[error("trade quantity and unit price must be positive")]
     InvalidTrade,
     #[error("seller and buyer must be different settlements")]
@@ -136,7 +174,10 @@ impl World {
 
     pub fn advance_tick(&mut self) -> Result<(), SimulationError> {
         let mut next = self.clone();
-        let tick = next.tick.checked_add(1).ok_or(SimulationError::TickOverflow)?;
+        let tick = next
+            .tick
+            .checked_add(1)
+            .ok_or(SimulationError::TickOverflow)?;
         let mut changes = Vec::new();
 
         for settlement in next.settlements.values_mut() {
@@ -241,7 +282,9 @@ impl World {
             });
         }
         let mut next = self.clone();
-        let site = next.resource_sites.get(&command.site_id)
+        let site = next
+            .resource_sites
+            .get(&command.site_id)
             .ok_or_else(|| SimulationError::UnknownResourceSite(command.site_id.clone()))?;
         let available = site.stocks.get(&command.good).copied().unwrap_or(0);
         if available < command.quantity {
@@ -251,23 +294,45 @@ impl World {
                 available,
             });
         }
-        let settlement = next.settlements.get(&command.settlement_id)
+        let settlement = next
+            .settlements
+            .get(&command.settlement_id)
             .ok_or_else(|| SimulationError::UnknownSettlement(command.settlement_id.clone()))?;
-        let new_stock = settlement.inventory.get(&command.good).copied().unwrap_or(0)
+        let new_stock = settlement
+            .inventory
+            .get(&command.good)
+            .copied()
+            .unwrap_or(0)
             .checked_add(command.quantity)
             .ok_or_else(|| SimulationError::InventoryOverflow(command.settlement_id.clone()))?;
 
-        *next.resource_sites.get_mut(&command.site_id).unwrap().stocks.entry(command.good).or_default() -= command.quantity;
-        next.settlements.get_mut(&command.settlement_id).unwrap().inventory.insert(command.good, new_stock);
+        *next
+            .resource_sites
+            .get_mut(&command.site_id)
+            .unwrap()
+            .stocks
+            .entry(command.good)
+            .or_default() -= command.quantity;
+        next.settlements
+            .get_mut(&command.settlement_id)
+            .unwrap()
+            .inventory
+            .insert(command.good, new_stock);
         let sequence = next.next_sequence();
         next.events.push(WorldEvent {
-            world_id: next.id, tick: next.tick, sequence, actor: command.actor,
+            world_id: next.id,
+            tick: next.tick,
+            sequence,
+            actor: command.actor,
             cause: "resource_extraction".into(),
             affected_entities: vec![command.site_id.clone(), command.settlement_id.clone()],
-            provenance: Provenance::GeneratedSimulation, ruleset_version: next.ruleset_version,
+            provenance: Provenance::GeneratedSimulation,
+            ruleset_version: next.ruleset_version,
             payload: EventPayload::ResourceExtracted {
-                site_id: command.site_id, settlement_id: command.settlement_id,
-                good: command.good, amount: command.quantity,
+                site_id: command.site_id,
+                settlement_id: command.settlement_id,
+                good: command.good,
+                amount: command.quantity,
             },
         });
         *self = next;
@@ -282,27 +347,42 @@ impl World {
             return Err(SimulationError::SameSettlementTrade);
         }
         let mut next = self.clone();
-        let seller = next.settlements.get(&command.seller_id)
+        let seller = next
+            .settlements
+            .get(&command.seller_id)
             .ok_or_else(|| SimulationError::UnknownSettlement(command.seller_id.clone()))?;
-        let buyer = next.settlements.get(&command.buyer_id)
+        let buyer = next
+            .settlements
+            .get(&command.buyer_id)
             .ok_or_else(|| SimulationError::UnknownSettlement(command.buyer_id.clone()))?;
         let goods_available = seller.inventory.get(&command.good).copied().unwrap_or(0);
         if goods_available < command.quantity {
             return Err(SimulationError::InsufficientGoods {
-                settlement_id: command.seller_id, requested: command.quantity, available: goods_available,
+                settlement_id: command.seller_id,
+                requested: command.quantity,
+                available: goods_available,
             });
         }
         let total_price = i64::try_from(command.quantity)
-            .ok().and_then(|quantity| quantity.checked_mul(command.unit_price))
+            .ok()
+            .and_then(|quantity| quantity.checked_mul(command.unit_price))
             .ok_or(SimulationError::TreasuryOverflow(command.buyer_id.clone()))?;
         if buyer.treasury < total_price {
             return Err(SimulationError::InsufficientFunds {
-                settlement_id: command.buyer_id, required: total_price, available: buyer.treasury,
+                settlement_id: command.buyer_id,
+                required: total_price,
+                available: buyer.treasury,
             });
         }
-        let seller_treasury = seller.treasury.checked_add(total_price)
+        let seller_treasury = seller
+            .treasury
+            .checked_add(total_price)
             .ok_or_else(|| SimulationError::TreasuryOverflow(command.seller_id.clone()))?;
-        let buyer_goods = buyer.inventory.get(&command.good).copied().unwrap_or(0)
+        let buyer_goods = buyer
+            .inventory
+            .get(&command.good)
+            .copied()
+            .unwrap_or(0)
             .checked_add(command.quantity)
             .ok_or_else(|| SimulationError::InventoryOverflow(command.buyer_id.clone()))?;
 
@@ -315,13 +395,20 @@ impl World {
 
         let sequence = next.next_sequence();
         next.events.push(WorldEvent {
-            world_id: next.id, tick: next.tick, sequence, actor: command.actor,
+            world_id: next.id,
+            tick: next.tick,
+            sequence,
+            actor: command.actor,
             cause: "bilateral_trade".into(),
             affected_entities: vec![command.seller_id.clone(), command.buyer_id.clone()],
-            provenance: Provenance::GeneratedSimulation, ruleset_version: next.ruleset_version,
+            provenance: Provenance::GeneratedSimulation,
+            ruleset_version: next.ruleset_version,
             payload: EventPayload::TradeExecuted {
-                seller_id: command.seller_id, buyer_id: command.buyer_id,
-                good: command.good, quantity: command.quantity, total_price,
+                seller_id: command.seller_id,
+                buyer_id: command.buyer_id,
+                good: command.good,
+                quantity: command.quantity,
+                total_price,
             },
         });
         *self = next;
@@ -335,25 +422,43 @@ mod tests {
 
     fn world() -> World {
         let river = Settlement {
-            id: "river-town".into(), name: "River Town".into(), population: 100, treasury: 500,
-            inventory: [(Good::Food, 200), (Good::Timber, 20)].into_iter().collect(),
+            id: "river-town".into(),
+            name: "River Town".into(),
+            population: 100,
+            treasury: 500,
+            inventory: [(Good::Food, 200), (Good::Timber, 20)]
+                .into_iter()
+                .collect(),
             food_per_person_per_tick: 1,
             production: vec![ProductionRecipe {
-                id: "fishery".into(), output: Good::Food, output_amount: 30, inputs: BTreeMap::new(),
+                id: "fishery".into(),
+                output: Good::Food,
+                output_amount: 30,
+                inputs: BTreeMap::new(),
             }],
         };
         let hill = Settlement {
-            id: "hill-village".into(), name: "Hill Village".into(), population: 40, treasury: 100,
+            id: "hill-village".into(),
+            name: "Hill Village".into(),
+            population: 40,
+            treasury: 100,
             inventory: [(Good::Food, 100), (Good::Stone, 5)].into_iter().collect(),
-            food_per_person_per_tick: 1, production: vec![],
+            food_per_person_per_tick: 1,
+            production: vec![],
         };
         let site = ResourceSite {
-            id: "stone-quarry".into(), name: "Stone Quarry".into(),
+            id: "stone-quarry".into(),
+            name: "Stone Quarry".into(),
             stocks: [(Good::Stone, 1000)].into_iter().collect(),
         };
         World {
-            id: Uuid::nil(), seed: 42, ruleset_version: 1, tick: 0,
-            settlements: [(river.id.clone(), river), (hill.id.clone(), hill)].into_iter().collect(),
+            id: Uuid::nil(),
+            seed: 42,
+            ruleset_version: 1,
+            tick: 0,
+            settlements: [(river.id.clone(), river), (hill.id.clone(), hill)]
+                .into_iter()
+                .collect(),
             resource_sites: [(site.id.clone(), site)].into_iter().collect(),
             events: vec![],
         }
@@ -366,13 +471,20 @@ mod tests {
         assert_eq!(w.settlements["river-town"].inventory[&Good::Food], 130);
         assert_eq!(w.settlements["hill-village"].inventory[&Good::Food], 60);
         assert_eq!(w.tick, 1);
-        assert!(w.events.iter().any(|e| matches!(e.payload, EventPayload::FoodConsumed { amount: 100, .. })));
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::FoodConsumed { amount: 100, .. })));
     }
 
     #[test]
     fn failed_tick_is_atomic() {
         let mut w = world();
-        w.settlements.get_mut("river-town").unwrap().inventory.insert(Good::Food, 0);
+        w.settlements
+            .get_mut("river-town")
+            .unwrap()
+            .inventory
+            .insert(Good::Food, 0);
         let before = w.clone();
         assert!(w.advance_tick().is_err());
         assert_eq!(w, before);
@@ -382,21 +494,33 @@ mod tests {
     fn extraction_conserves_stock_and_is_audited() {
         let mut w = world();
         w.extract_resource(ExtractionCommand {
-            site_id: "stone-quarry".into(), settlement_id: "hill-village".into(),
-            good: Good::Stone, quantity: 25, actor: "player".into(),
-        }).unwrap();
+            site_id: "stone-quarry".into(),
+            settlement_id: "hill-village".into(),
+            good: Good::Stone,
+            quantity: 25,
+            actor: "player".into(),
+        })
+        .unwrap();
         assert_eq!(w.resource_sites["stone-quarry"].stocks[&Good::Stone], 975);
         assert_eq!(w.settlements["hill-village"].inventory[&Good::Stone], 30);
-        assert!(matches!(w.events[0].payload, EventPayload::ResourceExtracted { amount: 25, .. }));
+        assert!(matches!(
+            w.events[0].payload,
+            EventPayload::ResourceExtracted { amount: 25, .. }
+        ));
     }
 
     #[test]
     fn trade_transfers_goods_and_treasury_atomically() {
         let mut w = world();
         w.execute_trade(TradeCommand {
-            seller_id: "hill-village".into(), buyer_id: "river-town".into(),
-            good: Good::Stone, quantity: 3, unit_price: 10, actor: "player".into(),
-        }).unwrap();
+            seller_id: "hill-village".into(),
+            buyer_id: "river-town".into(),
+            good: Good::Stone,
+            quantity: 3,
+            unit_price: 10,
+            actor: "player".into(),
+        })
+        .unwrap();
         assert_eq!(w.settlements["hill-village"].inventory[&Good::Stone], 2);
         assert_eq!(w.settlements["river-town"].inventory[&Good::Stone], 3);
         assert_eq!(w.settlements["hill-village"].treasury, 130);
@@ -408,8 +532,12 @@ mod tests {
         let mut w = world();
         let before = w.clone();
         let result = w.execute_trade(TradeCommand {
-            seller_id: "hill-village".into(), buyer_id: "river-town".into(),
-            good: Good::Iron, quantity: 100, unit_price: 10, actor: "player".into(),
+            seller_id: "hill-village".into(),
+            buyer_id: "river-town".into(),
+            good: Good::Iron,
+            quantity: 100,
+            unit_price: 10,
+            actor: "player".into(),
         });
         assert!(result.is_err());
         assert_eq!(w, before);
@@ -421,7 +549,10 @@ mod tests {
         let mut b = world();
         a.settlements.get_mut("river-town").unwrap().population = 0;
         b.settlements.get_mut("river-town").unwrap().population = 0;
-        for _ in 0..4 { a.advance_tick().unwrap(); b.advance_tick().unwrap(); }
+        for _ in 0..4 {
+            a.advance_tick().unwrap();
+            b.advance_tick().unwrap();
+        }
         assert_eq!(a, b);
         let encoded = serde_json::to_vec(&a).unwrap();
         let decoded: World = serde_json::from_slice(&encoded).unwrap();
