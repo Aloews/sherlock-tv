@@ -56,7 +56,7 @@ Open the local Trunk URL. Set the API address in the client to the reachable API
 - `POST /api/v1/world/{world_id}/tick` — atomically advance one tick, persist the new snapshot and append events.
 - `GET /api/v1/world/{world_id}/replay` — rebuild from the seed and verify the stored snapshot and event history.
 
-The starter world is a prototype scenario with abstract food, timber and treasury units. It is not a historical reconstruction. PostgreSQL stores one JSONB state snapshot per tick and a separate append-only event stream. The replay endpoint reconstructs the world from its starter seed and committed ticks, then compares both the current snapshot and event stream. Replay checkpoints, schema-upgrade compatibility, authentication, multi-user authorization and production hardening are not implemented yet.
+The starter world is a prototype scenario with abstract food, timber and treasury units plus four natural-resource sites measured in cubic metres or tonnes. It is not a historical reconstruction. PostgreSQL stores one JSONB state snapshot per tick and a separate append-only event stream. The replay endpoint reconstructs the world from its starter seed and ruleset version, then compares both the current snapshot and event stream. Legacy snapshots without the resource-site field remain readable; replay rejects unsupported historical ruleset versions rather than silently comparing different simulation rules. Replay checkpoints, authentication, multi-user authorization and production hardening are not implemented yet.
 
 ## Quality gates
 
