@@ -113,7 +113,7 @@ impl WorldMap {
             .collect();
         let upland_cells = cells
             .iter()
-            .filter(|cell| cell.position.x == 0 || cell.position.x >= 6)
+            .filter(|cell| cell.position.x < 2 || cell.position.x > 4)
             .map(|cell| cell.position)
             .collect();
 
