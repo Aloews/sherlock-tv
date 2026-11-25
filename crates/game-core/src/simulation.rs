@@ -117,6 +117,7 @@ impl SimulationEngine {
                 payload: draft.payload,
             });
         }
+        candidate.event_log.extend(events.iter().cloned());
         *world = candidate;
         Ok(events)
     }
@@ -220,7 +221,7 @@ impl SimulationSystem for CivilizationSystem {
                 drafts.push(EventDraft {
                     actor: "demography".into(),
                     cause: if population_delta > 0 {
-                        "food_surplus".into()
+                        "food_surplus"
                     } else {
                         "food_shortage"
                     }
