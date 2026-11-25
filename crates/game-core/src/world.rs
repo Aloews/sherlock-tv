@@ -429,6 +429,23 @@ impl WorldState {
             if *id != entity.id {
                 return Err(format!("entity key does not match entity id: {}", id.0));
             }
+            if entity
+                .location
+                .is_some_and(|location| self.geography.cell_at(location).is_none())
+            {
+                return Err(format!("entity {} is outside world geography", id.0));
+            }
+            if entity.kind == EntityKind::ResourceSite && !self.resource_sites.contains_key(id) {
+                return Err(format!("resource-site entity {} has no typed resource state", id.0));
+            }
+        }
+        if self
+            .entities
+            .keys()
+            .next_back()
+            .is_some_and(|id| self.next_entity_id <= id.0)
+        {
+            return Err("next entity id does not exceed registered entity ids".into());
         }
         for (id, site) in &self.resource_sites {
             if *id != site.id {
@@ -440,6 +457,9 @@ impl WorldState {
                 .ok_or_else(|| format!("resource site {} has no entity record", id.0))?;
             if entity.kind != EntityKind::ResourceSite || entity.location != Some(site.location) {
                 return Err(format!("resource site {} has inconsistent entity metadata", id.0));
+            }
+            if self.geography.cell_at(site.location).is_none() {
+                return Err(format!("resource site {} is outside world geography", id.0));
             }
             if site.stock > site.capacity {
                 return Err(format!("resource site {} exceeds its capacity", id.0));
