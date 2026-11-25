@@ -21,7 +21,7 @@ struct HealthResponse { status: &'static str, service: &'static str }
 #[derive(Deserialize)]
 struct CreateWorldRequest { seed: Option<u64> }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct SettlementView {
     id: u64,
     name: String,
@@ -31,7 +31,7 @@ struct SettlementView {
     treasury: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct WorldView {
     world_id: u64,
     seed: u64,
