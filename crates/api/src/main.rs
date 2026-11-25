@@ -294,6 +294,9 @@ mod tests {
             200
         );
         assert_eq!(view.event_count, 1);
+        assert_eq!(view.map.width, 8);
+        assert_eq!(view.map.height, 6);
+        assert_eq!(view.map.cells.len(), 48);
         assert_eq!(
             get_world(State(state)).await.expect("world exists").0.seed,
             77
