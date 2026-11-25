@@ -131,6 +131,9 @@ fn event_type(event: &EventEnvelope) -> String {
         EventPayload::ResourceStockChanged { resource, .. } => {
             format!("resource_stock_changed:{resource}")
         }
+        EventPayload::ResourceShortage { resource, .. } => {
+            format!("resource_shortage:{resource}")
+        }
         EventPayload::ProductionCompleted { good, .. } => {
             format!("production_completed:{good}")
         }
@@ -581,6 +584,7 @@ mod tests {
         .0;
         assert_eq!(created.seed, 77);
         assert_eq!(created.tick, 0);
+        assert_eq!(created.ruleset_version, CURRENT_RULESET_VERSION);
         assert_eq!(created.settlements.len(), 2);
         assert_eq!(created.resource_sites.len(), 4);
         assert!(
@@ -714,7 +718,7 @@ mod tests {
         let mut world = load_world(&state.pool, database_id)
             .await
             .expect("load world");
-        world.ruleset_version = 1;
+        world.ruleset_version = 2;
         let snapshot = serde_json::to_value(&world).expect("serialize legacy fixture");
         sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
             .bind(database_id)
