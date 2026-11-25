@@ -15,6 +15,22 @@ concurrency:
 
 jobs:
   quality:
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sherlock
+          POSTGRES_PASSWORD: sherlock
+          POSTGRES_DB: sherlock
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sherlock -d sherlock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://sherlock:sherlock@localhost:5432/sherlock
     name: Format, lint, test and WASM check
     runs-on: ubuntu-latest
     steps:

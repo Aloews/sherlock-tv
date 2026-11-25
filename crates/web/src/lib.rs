@@ -1,21 +1,339 @@
 use leptos::prelude::*;
+use serde::Deserialize;
+
+const DEFAULT_API_BASE: &str = match option_env!("SHERLOCK_API_URL") {
+    Some(value) => value,
+    None => "http://localhost:8080",
+};
+
+#[derive(Clone, Debug, Deserialize)]
+struct WorldView {
+    world_id: u64,
+    seed: u64,
+    tick: u64,
+    ruleset_version: u32,
+    entity_count: usize,
+    event_count: usize,
+    settlements: Vec<SettlementView>,
+    map: MapView,
+    recent_events: Vec<EventView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct MapView {
+    width: u16,
+    height: u16,
+    cells: Vec<MapCellView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct MapCellView {
+    x: u16,
+    y: u16,
+    terrain: String,
+    climate: String,
+    elevation_meters: u16,
+    soil_fertility: u8,
+    water_access: bool,
+    settlements: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct EventView {
+    tick: u64,
+    sequence: u64,
+    actor: String,
+    cause: String,
+    event_type: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct SettlementView {
+    id: u64,
+    name: String,
+    x: u16,
+    y: u16,
+    population: u64,
+    food: u64,
+    timber: u64,
+    treasury: u64,
+}
 
 #[component]
-fn WorldOverview() -> impl IntoView {
+fn WorldDashboard() -> impl IntoView {
+    let (world, set_world) = signal(None::<WorldView>);
+    let (status, set_status) = signal("Подключите API и создайте новый мир.".to_string());
+    let (api_base, set_api_base) = signal(DEFAULT_API_BASE.trim_end_matches('/').to_string());
+    let (world_id, set_world_id) = signal(String::new());
+    let (replay_result, set_replay_result) = signal(None::<ReplayView>);
+
+    let create_world = move |_| {
+        let base = api_base.get_untracked();
+        set_status.set("Создаём мир…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response = gloo_net::http::Request::post(&format!("{base}/api/v1/world"))
+                    .header("Content-Type", "application/json")
+                    .body(r#"{"seed":42}"#)
+                    .map_err(|error| error.to_string())?
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<WorldView>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(view) => {
+                    set_status.set(format!("Мир сохранён. ID: {}.", view.world_id));
+                    set_world_id.set(view.world_id.to_string());
+                    set_replay_result.set(None);
+                    set_world.set(Some(view));
+                }
+                Err(error) => set_status.set(format!("Не удалось создать мир: {error}")),
+            }
+        });
+    };
+
+    let load_world = move |_| {
+        let base = api_base.get_untracked();
+        let requested_id = world_id.get_untracked();
+        let Ok(id) = requested_id.trim().parse::<u64>() else {
+            set_status.set("Укажите числовой ID мира.".into());
+            return;
+        };
+        set_status.set("Загружаем сохранённый мир…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response = gloo_net::http::Request::get(&format!("{base}/api/v1/world/{id}"))
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<WorldView>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(view) => {
+                    set_status.set(format!("Мир {} загружен из сохранения.", view.world_id));
+                    set_world_id.set(view.world_id.to_string());
+                    set_replay_result.set(None);
+                    set_world.set(Some(view));
+                }
+                Err(error) => set_status.set(format!("Не удалось загрузить мир: {error}")),
+            }
+        });
+    };
+
+    let advance_tick = move |_| {
+        let base = api_base.get_untracked();
+        let Some(id) = world.get_untracked().map(|current| current.world_id) else {
+            set_status.set("Сначала создайте или загрузите мир.".into());
+            return;
+        };
+        set_status.set("Выполняется ход…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response =
+                    gloo_net::http::Request::post(&format!("{base}/api/v1/world/{id}/tick"))
+                        .send()
+                        .await
+                        .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<TickResponse>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(response) => {
+                    set_status.set(format!(
+                        "Ход {} завершён. Записано событий: {}.",
+                        response.world.tick, response.emitted_events
+                    ));
+                    set_replay_result.set(None);
+                    set_world.set(Some(response.world));
+                }
+                Err(error) => set_status.set(format!("Не удалось выполнить ход: {error}")),
+            }
+        });
+    };
+
+    let verify_replay = move |_| {
+        let base = api_base.get_untracked();
+        let Some(id) = world.get_untracked().map(|current| current.world_id) else {
+            set_status.set("Сначала создайте или загрузите мир.".into());
+            return;
+        };
+        set_status.set("Проверяем историю симуляции…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response =
+                    gloo_net::http::Request::get(&format!("{base}/api/v1/world/{id}/replay"))
+                        .send()
+                        .await
+                        .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<ReplayView>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(replay) => {
+                    set_status.set(if replay.verified {
+                        format!(
+                            "История мира {} подтверждена повторным расчётом.",
+                            replay.world_id
+                        )
+                    } else {
+                        "Обнаружено расхождение между снимком и историей событий.".into()
+                    });
+                    set_replay_result.set(Some(replay));
+                }
+                Err(error) => set_status.set(format!("Не удалось проверить историю: {error}")),
+            }
+        });
+    };
+
     view! {
         <section class="world-overview">
             <p class="eyebrow">"SHERLOCK / WORLD SIMULATION"</p>
             <h1>"Живой мир. Собственная история."</h1>
-            <p class="lead">
-                "Цивилизация развивается как единая система: природа, люди, знания, производство, обмен, финансы, институты и культура."
-            </p>
-            <div class="world-status">
-                <span class="status-indicator"></span>
-                <div>
-                    <strong>"Новый мир ещё не создан"</strong>
-                    <p>"Здесь появятся карта мира, ход времени, события и инструменты наблюдения."</p>
+            <p class="lead">"Цивилизация развивается как единая система: природа, люди, производство, обмен, финансы и институты. Каждый ход меняет состояние мира и оставляет проверяемый след событий."</p>
+
+            <section class="control-panel">
+                <label for="api-base">"Адрес игрового API"</label>
+                <input id="api-base" type="url" prop:value=move || api_base.get()
+                    on:input=move |event| set_api_base.set(event_target_value(&event)) />
+                <label for="world-id">"ID сохранённого мира"</label>
+                <input id="world-id" type="number" min="1" prop:value=move || world_id.get()
+                    on:input=move |event| set_world_id.set(event_target_value(&event)) />
+                <div class="actions">
+                    <button class="primary-button" on:click=create_world>"Создать мир"</button>
+                    <button class="secondary-button" on:click=load_world>"Загрузить мир"</button>
+                    <button class="secondary-button" on:click=advance_tick disabled=move || world.get().is_none()>"Следующий ход"</button>
+                    <button class="secondary-button" on:click=verify_replay disabled=move || world.get().is_none()>"Проверить историю"</button>
                 </div>
-            </div>
+                <p class="status-message" aria-live="polite">{move || status.get()}</p>
+            </section>
+
+            <Show when=move || replay_result.get().is_some()>
+                {move || replay_result.get().map(|replay| view! {
+                    <section class="replay-result">
+                        <p class="eyebrow">"ПРОВЕРКА ВОСПРОИЗВЕДЕНИЯ"</p>
+                        <h3>{if replay.verified { "История подтверждена" } else { "Обнаружено расхождение" }}</h3>
+                        <p>{format!("Мир #{} · сохранённый ход: {} · воспроизведено: {} · событий: {}", replay.world_id, replay.tick, replay.replayed_ticks, replay.event_count)}</p>
+                        <div class="replay-checks">
+                            <span>{if replay.snapshot_matches { "✓ Состояние совпадает" } else { "✕ Состояние отличается" }}</span>
+                            <span>{if replay.event_log_matches { "✓ История событий совпадает" } else { "✕ История событий отличается" }}</span>
+                        </div>
+                    </section>
+                })}
+            </Show>
+
+            <Show when=move || world.get().is_some()>
+                {move || world.get().map(|current| view! {
+                    <section class="world-panel">
+                        <div class="world-heading">
+                            <div><p class="eyebrow">"ТЕКУЩЕЕ СОСТОЯНИЕ"</p><h2>{format!("Мир #{}", current.world_id)}</h2></div>
+                            <div class="tick-counter"><span>"ХОД"</span><strong>{current.tick}</strong></div>
+                        </div>
+                        <div class="metrics-grid">
+                            <div><span>"НАСЕЛЕНИЕ"</span><strong>{current.settlements.iter().map(|s| s.population).sum::<u64>()}</strong></div>
+                            <div><span>"ПОСЕЛЕНИЯ"</span><strong>{current.settlements.len()}</strong></div>
+                            <div><span>"СОБЫТИЯ"</span><strong>{current.event_count}</strong></div>
+                            <div><span>"SEED / RULESET"</span><strong>{format!("{} / {}", current.seed, current.ruleset_version)}</strong></div>
+                        </div>
+                        <section class="map-panel">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ГЕОГРАФИЯ"</p><h3>"Рельеф и природные условия"</h3></div>
+                                <span>{format!("{} × {}", current.map.width, current.map.height)}</span>
+                            </div>
+                            <div class="world-map">
+                                {current.map.cells.into_iter().map(|cell| {
+                                    let class_name = format!("map-cell terrain-{}", cell.terrain);
+                                    let marker = if cell.settlements.is_empty() {
+                                        match cell.terrain.as_str() {
+                                            "river" => "Р",
+                                            "forest" => "Л",
+                                            "hills" => "Х",
+                                            "mountain" => "Г",
+                                            _ => "П",
+                                        }
+                                    } else {
+                                        "⌂"
+                                    };
+                                    let title = format!(
+                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {}",
+                                        cell.x,
+                                        cell.y,
+                                        cell.climate,
+                                        cell.elevation_meters,
+                                        cell.soil_fertility,
+                                        if cell.water_access { "есть" } else { "нет" },
+                                        cell.settlements.join(", ")
+                                    );
+                                    view! {
+                                        <div class=class_name title=title>
+                                            <span>{marker}</span>
+                                        </div>
+                                    }
+                                }).collect_view()}
+                            </div>
+                            <div class="map-legend">
+                                <span>"П — равнины"</span><span>"Л — лес"</span><span>"Х — холмы"</span><span>"Г — горы"</span><span>"Р — река"</span>
+                            </div>
+                        </section>
+                        <div class="settlement-grid">
+                            {current.settlements.into_iter().map(|settlement| view! {
+                                <article class="settlement-card">
+                                    <p class="eyebrow">{format!("ПОСЕЛЕНИЕ #{}", settlement.id)}</p>
+                                    <h3>{settlement.name}</h3>
+                                    <div class="settlement-stat"><span>"Координаты"</span><strong>{format!("{}, {}", settlement.x, settlement.y)}</strong></div>
+                                    <div class="settlement-stat"><span>"Население"</span><strong>{settlement.population}</strong></div>
+                                    <div class="settlement-stat"><span>"Запасы пищи"</span><strong>{settlement.food}</strong></div>
+                                    <div class="settlement-stat"><span>"Древесина"</span><strong>{settlement.timber}</strong></div>
+                                    <div class="settlement-stat"><span>"Казна"</span><strong>{settlement.treasury}</strong></div>
+                                </article>
+                            }).collect_view()}
+                        </div>
+                        <section class="event-history">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ХРОНИКА"</p><h3>"Последние события"</h3></div>
+                                <span>{format!("{} записей", current.event_count)}</span>
+                            </div>
+                            <div class="event-list">
+                                {current.recent_events.into_iter().map(|event| view! {
+                                    <article class="event-row">
+                                        <span class="event-tick">{format!("ХОД {}", event.tick)}</span>
+                                        <div><strong>{event.event_type}</strong><p>{format!("{} · {}", event.actor, event.cause)}</p></div>
+                                        <span class="event-sequence">{format!("#{}", event.sequence)}</span>
+                                    </article>
+                                }).collect_view()}
+                            </div>
+                        </section>
+                        <p class="entity-note">{format!("Всего сущностей в мире: {}", current.entity_count)}</p>
+                    </section>
+                })}
+            </Show>
+
             <div class="system-grid">
                 <article><span>"01"</span><h2>"Планета"</h2><p>"География, климат и экология"</p></article>
                 <article><span>"02"</span><h2>"Население"</h2><p>"Люди, семьи и поселения"</p></article>
@@ -28,6 +346,23 @@ fn WorldOverview() -> impl IntoView {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+struct ReplayView {
+    world_id: u64,
+    tick: u64,
+    replayed_ticks: u64,
+    event_count: usize,
+    snapshot_matches: bool,
+    event_log_matches: bool,
+    verified: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct TickResponse {
+    world: WorldView,
+    emitted_events: usize,
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     view! {
@@ -36,7 +371,7 @@ pub fn App() -> impl IntoView {
                 <a class="brand" href="#/">"SHERLOCK"</a>
                 <span class="product-label">"CIVILIZATION SIMULATION"</span>
             </header>
-            <WorldOverview/>
+            <WorldDashboard/>
             <footer>"SIMULATION FOUNDATION / RUST"</footer>
         </main>
     }

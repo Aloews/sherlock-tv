@@ -3,58 +3,146 @@
   "description": "Bounded implementation queue for the civilization simulation. Tasks must be implemented and verified against the product contract.",
   "tasks": [
     {
+      "id": "PLAYABLE-001",
+      "title": "Complete first interactive civilization vertical slice",
+      "objective": "Create a deterministic starter world with two settlements, run population/food/timber/treasury transitions, expose create/inspect/step API commands, and connect them to a real Leptos browser interface.",
+      "acceptance": [
+        "A seed creates the same initial world and deterministic future state",
+        "Two settlements expose population, food, timber and treasury",
+        "A tick changes domain state and emits causal versioned events",
+        "HTTP tests cover create, inspect, step, missing world and overflow rollback",
+        "Browser controls call the real API and render returned state",
+        "All release-readiness CI gates pass on the exact PR head"
+      ],
+      "status": "in_progress",
+      "progress": "Implemented: seeded starter world, two settlements, typed 8x6 geography, deterministic food/timber/population/treasury tick, PostgreSQL snapshots and append-only events, create/inspect/step browser/API flow, and deterministic replay verification. Remaining for the broader W1 milestone: ecological resource sites, population cohorts/households, labor/production/inventories, inter-settlement trade and stronger persistence/replay scaling."
+    },
+    {
+      "id": "QA-READY-001",
+      "title": "Independent readiness review on every implementation PR",
+      "objective": "Have the simulation QA and release-readiness agent profiles inspect exact PR head commits, invariants, browser integration and GitHub Actions evidence before merge.",
+      "acceptance": [
+        "Exact commit SHA recorded",
+        "Formatting, Clippy, workspace tests, WASM check and release build are green",
+        "No unresolved high-severity review findings",
+        "Readiness report links to CI run and commit"
+      ],
+      "status": "in_progress",
+      "progress": "Agent review requested in GitHub issue #18. PR #17 replay implementation passed formatting, Clippy, PostgreSQL-backed workspace tests, WASM check and release build on exact head bc014169664f9415cb3d3ada9c186a1ecaa5532a. PR #16 must be rechecked on its post-merge head before acceptance."
+    },
+    {
       "id": "WORLD-001",
       "title": "Define geography and spatial primitives",
       "objective": "Add typed coordinates, regions, terrain, water bodies, climate bands and map adjacency to game-core without embedding presentation or persistence concerns.",
-      "acceptance": ["Units and coordinate conventions are explicit", "Adjacency and region invariants have tests", "Serialization round-trips preserve domain state"]
+      "acceptance": [
+        "Units and coordinate conventions are explicit",
+        "Adjacency and region invariants have tests",
+        "Serialization round-trips preserve domain state"
+      ],
+      "status": "in_progress",
+      "progress": "Typed grid, starter terrain/climate, river access, regions, adjacency and serialization tests implemented; hydrology and resource-site placement remain."
     },
     {
       "id": "WORLD-002",
       "title": "Model ecology and renewable resource flows",
       "objective": "Implement climate, soil, water, biomass and renewable/non-renewable resource stocks as connected state transitions with explicit units and conservation constraints.",
-      "acceptance": ["Every quantity has an explicit unit", "Stock/flow conservation invariants are tested", "Unknown inputs are not silently replaced with zero"]
+      "acceptance": [
+        "Every quantity has an explicit unit",
+        "Stock/flow conservation invariants are tested",
+        "Unknown inputs are not silently replaced with zero"
+      ]
     },
     {
       "id": "PEOPLE-001",
       "title": "Add population cohorts and households",
       "objective": "Model births, deaths, age cohorts, household membership, skills, health and migration as domain entities with explicit time semantics.",
-      "acceptance": ["Population transitions are deterministic for a fixed seed and ruleset", "Household membership invariants are tested", "Birth/death/migration events retain causal metadata"]
+      "acceptance": [
+        "Population transitions are deterministic for a fixed seed and ruleset",
+        "Household membership invariants are tested",
+        "Birth/death/migration events retain causal metadata"
+      ]
     },
     {
       "id": "ECON-001",
       "title": "Add labor, production and inventories",
       "objective": "Implement production functions, labor allocation, inventories and goods with explicit quantities and units. Do not mix prices or financial balances into physical stock quantities.",
-      "acceptance": ["Production consumes declared inputs and produces declared outputs", "Inventory cannot become negative", "Tests cover input constraints and output conservation"]
+      "acceptance": [
+        "Production consumes declared inputs and produces declared outputs",
+        "Inventory cannot become negative",
+        "Tests cover input constraints and output conservation"
+      ]
     },
     {
       "id": "ECON-002",
       "title": "Add exchange, logistics and trade",
       "objective": "Model transport capacity, routes, transaction settlement, supply and demand across settlements with explicit ownership and provenance.",
-      "acceptance": ["Trade cannot create goods or money", "Ownership changes are recorded as events", "Route capacity and failed settlement are tested"]
+      "acceptance": [
+        "Trade cannot create goods or money",
+        "Ownership changes are recorded as events",
+        "Route capacity and failed settlement are tested"
+      ]
     },
     {
       "id": "FIN-001",
       "title": "Introduce double-entry accounting",
       "objective": "Implement currencies, accounts, balanced journal entries, credit, debt, interest and default as a financial subsystem separate from physical resource inventories.",
-      "acceptance": ["Every posted journal entry balances", "Currency and minor-unit precision are explicit", "Credit/default transitions are auditable and tested"]
+      "acceptance": [
+        "Every posted journal entry balances",
+        "Currency and minor-unit precision are explicit",
+        "Credit/default transitions are auditable and tested"
+      ]
     },
     {
       "id": "DYNASTY-001",
       "title": "Connect inheritance to ownership and institutions",
       "objective": "Integrate dynasty-core succession and inheritance with ownership records in game-core while preserving legal rules and historical context as scenario data.",
-      "acceptance": ["Inheritance transfers ownership without creating assets", "Competing claims can be represented", "Succession is deterministic and auditable"]
+      "acceptance": [
+        "Inheritance transfers ownership without creating assets",
+        "Competing claims can be represented",
+        "Succession is deterministic and auditable"
+      ]
     },
     {
       "id": "API-001",
       "title": "Add versioned world command and query endpoints",
       "objective": "Expose world creation, inspect, pause, step and fast-forward through typed /api/v1 endpoints with validation and stable error codes.",
-      "acceptance": ["HTTP contract tests cover success and validation failures", "Commands are idempotent where required", "No internal error details or secrets leak in responses"]
+      "acceptance": [
+        "HTTP contract tests cover success and validation failures",
+        "Commands are idempotent where required",
+        "No internal error details or secrets leak in responses"
+      ]
     },
     {
       "id": "WEB-001",
       "title": "Build world creation and observation flows",
       "objective": "Implement a responsive Leptos interface for scenario creation, world inspection, event history and pause/step/fast-forward controls using the typed API.",
-      "acceptance": ["All controls call real API behavior", "Loading, empty, unavailable and error states are distinct", "Keyboard and narrow-screen use are verified"]
+      "acceptance": [
+        "All controls call real API behavior",
+        "Loading, empty, unavailable and error states are distinct",
+        "Keyboard and narrow-screen use are verified"
+      ]
+    }
+  ],
+  "agent_roles": [
+    {
+      "id": "world-systems",
+      "profile": ".github/agents/world-systems.agent.md",
+      "responsibility": "Domain systems and deterministic simulation"
+    },
+    {
+      "id": "simulation-qa",
+      "profile": ".github/agents/simulation-qa.agent.md",
+      "responsibility": "Adversarial invariant, replay and regression testing"
+    },
+    {
+      "id": "api-product",
+      "profile": ".github/agents/api-product.agent.md",
+      "responsibility": "API and browser product integration"
+    },
+    {
+      "id": "release-readiness",
+      "profile": ".github/agents/release-readiness.agent.md",
+      "responsibility": "Independent exact-head readiness gate"
     }
   ]
 }

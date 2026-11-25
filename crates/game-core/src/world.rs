@@ -1,3 +1,4 @@
+use crate::geography::{GridPoint, WorldMap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -40,6 +41,7 @@ pub struct EntityRecord {
     pub kind: EntityKind,
     pub name: String,
     pub created_at: Tick,
+    pub location: Option<GridPoint>,
     pub attributes: BTreeMap<String, serde_json::Value>,
 }
 
@@ -130,7 +132,19 @@ pub struct WorldState {
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_event_sequence: u64,
+    #[serde(skip)]
+    pub event_log: Vec<EventEnvelope>,
+    pub geography: WorldMap,
     pub entities: BTreeMap<EntityId, EntityRecord>,
+}
+
+struct SettlementSetup {
+    population: u64,
+    food_stock: u64,
+    food_production: u64,
+    food_per_person: u64,
+    timber_stock: u64,
+    timber_regeneration: u64,
 }
 
 impl WorldState {
@@ -142,8 +156,99 @@ impl WorldState {
             tick: Tick(0),
             next_entity_id: 1,
             next_event_sequence: 0,
+            event_log: Vec::new(),
+            geography: WorldMap::starter(seed),
             entities: BTreeMap::new(),
         }
+    }
+
+    pub fn starter(seed: u64) -> Self {
+        let mut world = Self::new(seed, 1);
+        let river = world
+            .register_entity(EntityKind::Settlement, "Речной край".into())
+            .expect("initial entity id");
+        let hill = world
+            .register_entity(EntityKind::Settlement, "Каменный холм".into())
+            .expect("initial entity id");
+        world.settlement_attributes(
+            river,
+            SettlementSetup {
+                population: 120,
+                food_stock: 900,
+                food_production: 250,
+                food_per_person: 2,
+                timber_stock: 500,
+                timber_regeneration: 18,
+            },
+        );
+        assert!(world.set_entity_location(river, GridPoint { x: 2, y: 2 }));
+        assert!(world.set_entity_location(hill, GridPoint { x: 5, y: 4 }));
+        world.settlement_attributes(
+            hill,
+            SettlementSetup {
+                population: 80,
+                food_stock: 600,
+                food_production: 170,
+                food_per_person: 2,
+                timber_stock: 220,
+                timber_regeneration: 12,
+            },
+        );
+        world.event_log.push(EventEnvelope {
+            event_id: 0,
+            world_id: world.id,
+            tick: Tick(0),
+            sequence: 0,
+            actor: "world_factory".into(),
+            cause: "starter_scenario_created".into(),
+            affected_entities: vec![river, hill],
+            ruleset_version: world.ruleset_version,
+            provenance: Provenance::ModelAssumption {
+                assumption_id: "starter-settlements-v1".into(),
+            },
+            payload: EventPayload::WorldCreated,
+        });
+        world.next_event_sequence = 1;
+        world
+    }
+
+    fn settlement_attributes(&mut self, id: EntityId, setup: SettlementSetup) {
+        if let Some(entity) = self.entities.get_mut(&id) {
+            entity
+                .attributes
+                .insert("population".into(), setup.population.into());
+            entity
+                .attributes
+                .insert("food".into(), setup.food_stock.into());
+            entity
+                .attributes
+                .insert("food_production".into(), setup.food_production.into());
+            entity
+                .attributes
+                .insert("food_per_person".into(), setup.food_per_person.into());
+            entity
+                .attributes
+                .insert("timber".into(), setup.timber_stock.into());
+            entity.attributes.insert(
+                "timber_regeneration".into(),
+                setup.timber_regeneration.into(),
+            );
+            entity.attributes.insert("treasury".into(), 1000_u64.into());
+            entity
+                .attributes
+                .insert("tax_rate_basis_points".into(), 500_u64.into());
+        }
+    }
+
+    pub fn set_entity_location(&mut self, id: EntityId, position: GridPoint) -> bool {
+        if self.geography.cell_at(position).is_none() {
+            return false;
+        }
+        let Some(entity) = self.entities.get_mut(&id) else {
+            return false;
+        };
+        entity.location = Some(position);
+        true
     }
 
     pub fn register_entity(&mut self, kind: EntityKind, name: String) -> Option<EntityId> {
@@ -156,6 +261,7 @@ impl WorldState {
                 kind,
                 name,
                 created_at: self.tick,
+                location: None,
                 attributes: BTreeMap::new(),
             },
         );
