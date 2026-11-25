@@ -295,14 +295,15 @@ fn WorldDashboard() -> impl IntoView {
                                         "⌂"
                                     };
                                     let title = format!(
-                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {}",
+                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {} · ресурсы: {}",
                                         cell.x,
                                         cell.y,
                                         cell.climate,
                                         cell.elevation_meters,
                                         cell.soil_fertility,
                                         if cell.water_access { "есть" } else { "нет" },
-                                        format!("{} · {}", cell.settlements.join(", "), cell.resources.join(", "))
+                                        cell.settlements.join(", "),
+                                        cell.resources.join(", ")
                                     );
                                     view! {
                                         <div class=class_name title=title>
