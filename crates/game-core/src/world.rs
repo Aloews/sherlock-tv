@@ -130,7 +130,17 @@ pub struct WorldState {
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_event_sequence: u64,
+    pub event_log: Vec<EventEnvelope>,
     pub entities: BTreeMap<EntityId, EntityRecord>,
+}
+
+struct SettlementSetup {
+    population: u64,
+    food_stock: u64,
+    food_production: u64,
+    food_per_person: u64,
+    timber_stock: u64,
+    timber_regeneration: u64,
 }
 
 impl WorldState {
@@ -142,6 +152,7 @@ impl WorldState {
             tick: Tick(0),
             next_entity_id: 1,
             next_event_sequence: 0,
+            event_log: Vec::new(),
             entities: BTreeMap::new(),
         }
     }
@@ -154,44 +165,59 @@ impl WorldState {
         let hill = world
             .register_entity(EntityKind::Settlement, "Каменный холм".into())
             .expect("initial entity id");
-        world.settlement_attributes(river, 120, 900, 250, 2, 500, 18, 240);
-        world.settlement_attributes(hill, 80, 600, 170, 2, 220, 12, 160);
+        world.settlement_attributes(
+            river,
+            SettlementSetup {
+                population: 120,
+                food_stock: 900,
+                food_production: 250,
+                food_per_person: 2,
+                timber_stock: 500,
+                timber_regeneration: 18,
+            },
+        );
+        world.settlement_attributes(
+            hill,
+            SettlementSetup {
+                population: 80,
+                food_stock: 600,
+                food_production: 170,
+                food_per_person: 2,
+                timber_stock: 220,
+                timber_regeneration: 12,
+            },
+        );
+        world.event_log.push(EventEnvelope {
+            event_id: 0,
+            world_id: world.id,
+            tick: Tick(0),
+            sequence: 0,
+            actor: "world_factory".into(),
+            cause: "starter_scenario_created".into(),
+            affected_entities: vec![river, hill],
+            ruleset_version: world.ruleset_version,
+            provenance: Provenance::ModelAssumption {
+                assumption_id: "starter-settlements-v1".into(),
+            },
+            payload: EventPayload::WorldCreated,
+        });
+        world.next_event_sequence = 1;
         world
     }
 
-    fn settlement_attributes(
-        &mut self,
-        id: EntityId,
-        population: u64,
-        food: u64,
-        food_production: u64,
-        food_per_person: u64,
-        timber: u64,
-        timber_regeneration: u64,
-        food_capacity: u64,
-    ) {
+    fn settlement_attributes(&mut self, id: EntityId, setup: SettlementSetup) {
         if let Some(entity) = self.entities.get_mut(&id) {
-            entity
-                .attributes
-                .insert("population".into(), population.into());
-            entity.attributes.insert("food".into(), food.into());
-            entity
-                .attributes
-                .insert("food_production".into(), food_production.into());
-            entity
-                .attributes
-                .insert("food_per_person".into(), food_per_person.into());
-            entity
-                .attributes
-                .insert("food_capacity".into(), food_capacity.into());
-            entity.attributes.insert("timber".into(), timber.into());
-            entity
-                .attributes
-                .insert("timber_regeneration".into(), timber_regeneration.into());
+            entity.attributes.insert("population".into(), setup.population.into());
+            entity.attributes.insert("food".into(), setup.food_stock.into());
+            entity.attributes.insert("food_production".into(), setup.food_production.into());
+            entity.attributes.insert("food_per_person".into(), setup.food_per_person.into());
+            entity.attributes.insert("timber".into(), setup.timber_stock.into());
+            entity.attributes.insert(
+                "timber_regeneration".into(),
+                setup.timber_regeneration.into(),
+            );
             entity.attributes.insert("treasury".into(), 1000_u64.into());
-            entity
-                .attributes
-                .insert("tax_rate_basis_points".into(), 500_u64.into());
+            entity.attributes.insert("tax_rate_basis_points".into(), 500_u64.into());
         }
     }
 
