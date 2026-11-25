@@ -13,17 +13,22 @@
 
 ## World simulation vertical slice
 
-- [ ] Scenario creation and versioned world seed.
-- [ ] Geography, climate, hydrology and resource stocks/flows.
+- [~] Scenario creation and versioned world seed — starter scenario exists; seed controls world identity and deterministic simulation streams.
+- [~] Population, food, renewable timber and treasury transitions — initial settlement-level economy exists; cohort/household detail remains.
+- [ ] Geography, climate, hydrology and spatial resource locations.
 - [ ] Population cohorts, households, skills, health and migration.
-- [ ] Labor, production, inventories, logistics and trade across settlements.
+- [ ] Labor, production functions, inventories, logistics and trade across settlements.
 - [ ] Money, double-entry accounting, firms, credit and debt.
-- [ ] States, institutions, laws, taxation, public goods and legitimacy.
+- [ ] States, institutions, laws, taxation, public goods and legitimacy beyond the starter tax calculation.
 - [ ] Families, ownership, inheritance, succession and dynastic networks.
 - [ ] Culture, information, beliefs and historical memory.
-- [ ] PostgreSQL snapshots, append-only events and replay from genesis.
-- [ ] Rust API commands for create, inspect, pause, step and fast-forward.
-- [ ] Usable interface exercising real domain behavior.
+- [ ] PostgreSQL snapshots, append-only event persistence and replay from genesis.
+- [~] Rust API commands for create, inspect and step; pause and fast-forward remain.
+- [~] Leptos interface for create/step and settlement inspection; event history, persisted sessions and production API configuration remain.
+
+## Current implementation boundary
+
+The current playable-slice branch contains an in-memory starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events, create/inspect/step HTTP routes and a Leptos client that invokes those routes. State is process-local and is lost on API restart. No map, save/load, PostgreSQL persistence, multi-user isolation or production deployment is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
 
 ## Acceptance gates
 
