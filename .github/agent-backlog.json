@@ -14,7 +14,8 @@
         "Browser controls call the real API and render returned state",
         "All release-readiness CI gates pass on the exact PR head"
       ],
-      "status": "in_progress"
+      "status": "in_progress",
+      "progress": "Implemented: seeded starter world, two settlements, typed 8x6 geography, deterministic food/timber/population/treasury tick, PostgreSQL snapshots and append-only events, create/inspect/step browser/API flow, and deterministic replay verification. Remaining for the broader W1 milestone: ecological resource sites, population cohorts/households, labor/production/inventories, inter-settlement trade and stronger persistence/replay scaling."
     },
     {
       "id": "QA-READY-001",
@@ -26,7 +27,8 @@
         "No unresolved high-severity review findings",
         "Readiness report links to CI run and commit"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "progress": "Agent review requested in GitHub issue #18. PR #17 replay implementation passed formatting, Clippy, PostgreSQL-backed workspace tests, WASM check and release build on exact head bc014169664f9415cb3d3ada9c186a1ecaa5532a. PR #16 must be rechecked on its post-merge head before acceptance."
     },
     {
       "id": "WORLD-001",
