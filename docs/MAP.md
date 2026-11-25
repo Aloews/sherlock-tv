@@ -13,7 +13,7 @@
 
 ## World simulation vertical slice
 
-- [~] Scenario creation and versioned world seed — starter scenario exists; seed controls world identity and deterministic simulation streams.
+- [~] Scenario creation and versioned world seed — starter scenario exists; seed controls world identity and deterministic simulation streams; initial scenario event is recorded.
 - [~] Population, food, renewable timber and treasury transitions — initial settlement-level economy exists; cohort/household detail remains.
 - [ ] Geography, climate, hydrology and spatial resource locations.
 - [ ] Population cohorts, households, skills, health and migration.
@@ -28,7 +28,7 @@
 
 ## Current implementation boundary
 
-The current playable-slice branch contains an in-memory starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events, create/inspect/step HTTP routes and a Leptos client that invokes those routes. State is process-local and is lost on API restart. No map, save/load, PostgreSQL persistence, multi-user isolation or production deployment is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
+The current playable-slice branch contains an in-memory starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events and recent event history, create/inspect/step HTTP routes and a Leptos client that invokes those routes. State is process-local and is lost on API restart. No map, save/load, PostgreSQL persistence, multi-user isolation or production deployment is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
 
 ## Acceptance gates
 
