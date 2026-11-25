@@ -237,7 +237,7 @@ fn WorldDashboard() -> impl IntoView {
                     <section class="replay-result">
                         <p class="eyebrow">"ПРОВЕРКА ВОСПРОИЗВЕДЕНИЯ"</p>
                         <h3>{if replay.verified { "История подтверждена" } else { "Обнаружено расхождение" }}</h3>
-                        <p>{format!("Мир #{} · ходов воспроизведено: {} · событий: {}", replay.world_id, replay.replayed_ticks, replay.event_count)}</p>
+                        <p>{format!("Мир #{} · сохранённый ход: {} · воспроизведено: {} · событий: {}", replay.world_id, replay.tick, replay.replayed_ticks, replay.event_count)}</p>
                         <div class="replay-checks">
                             <span>{if replay.snapshot_matches { "✓ Состояние совпадает" } else { "✕ Состояние отличается" }}</span>
                             <span>{if replay.event_log_matches { "✓ История событий совпадает" } else { "✕ История событий отличается" }}</span>
