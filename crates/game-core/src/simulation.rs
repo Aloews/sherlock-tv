@@ -497,6 +497,24 @@ mod tests {
     }
 
     #[test]
+    fn starter_resource_sites_occupy_distinct_non_settlement_cells() {
+        let world = WorldState::starter(46);
+        let settlement_positions: Vec<_> = world
+            .entities
+            .values()
+            .filter(|entity| entity.kind == EntityKind::Settlement)
+            .filter_map(|entity| entity.location)
+            .collect();
+        let mut resource_positions = Vec::new();
+        for site in world.resource_sites.values() {
+            assert!(!settlement_positions.contains(&site.location));
+            assert!(!resource_positions.contains(&site.location));
+            resource_positions.push(site.location);
+        }
+        assert_eq!(resource_positions.len(), 4);
+    }
+
+    #[test]
     fn resource_site_registration_rejects_invalid_capacity_and_location() {
         let mut world = WorldState::starter(45);
         assert_eq!(
