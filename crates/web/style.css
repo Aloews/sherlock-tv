@@ -54,3 +54,16 @@ footer { padding-top: 20px; border-top: 1px solid #ffffff20; }
 .settlement-stat strong { color: #eef2f6; font-variant-numeric: tabular-nums; }
 .entity-note { color: #8193a5; font-size: 11px; }
 @media (max-width: 700px) { .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .settlement-grid { grid-template-columns: 1fr; } .control-panel, .world-panel { padding: 17px; } }
+
+
+.event-history { margin-top: 32px; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.section-heading h3 { margin: 7px 0 0; font-size: 20px; }
+.section-heading > span { color: #91a1b3; font-size: 11px; }
+.event-list { border-top: 1px solid #ffffff1c; }
+.event-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 44px; align-items: center; gap: 12px; padding: 13px 2px; border-bottom: 1px solid #ffffff12; }
+.event-tick, .event-sequence { color: #91a1b3; font-size: 10px; font-variant-numeric: tabular-nums; }
+.event-row strong { color: #e6edf3; font-size: 12px; font-weight: 600; }
+.event-row p { margin: 4px 0 0; color: #91a1b3; font-size: 11px; }
+.event-sequence { text-align: right; }
+@media (max-width: 480px) { .event-row { grid-template-columns: 64px minmax(0, 1fr) 34px; gap: 8px; } }
