@@ -15,6 +15,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    resource_sites: Vec<ResourceSiteView>,
     map: MapView,
     recent_events: Vec<EventView>,
 }
@@ -36,6 +37,20 @@ struct MapCellView {
     soil_fertility: u8,
     water_access: bool,
     settlements: Vec<String>,
+    resource_sites: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ResourceSiteView {
+    id: u64,
+    name: String,
+    kind: String,
+    x: u16,
+    y: u16,
+    stock: u64,
+    unit: String,
+    capacity: u64,
+    regeneration_per_tick: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -269,7 +284,11 @@ fn WorldDashboard() -> impl IntoView {
                             <div class="world-map">
                                 {current.map.cells.into_iter().map(|cell| {
                                     let class_name = format!("map-cell terrain-{}", cell.terrain);
-                                    let marker = if cell.settlements.is_empty() {
+                                    let marker = if !cell.settlements.is_empty() {
+                                        "⌂"
+                                    } else if !cell.resource_sites.is_empty() {
+                                        "◆"
+                                    } else {
                                         match cell.terrain.as_str() {
                                             "river" => "Р",
                                             "forest" => "Л",
@@ -277,18 +296,17 @@ fn WorldDashboard() -> impl IntoView {
                                             "mountain" => "Г",
                                             _ => "П",
                                         }
-                                    } else {
-                                        "⌂"
                                     };
                                     let title = format!(
-                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {}",
+                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {} · ресурсы: {}",
                                         cell.x,
                                         cell.y,
                                         cell.climate,
                                         cell.elevation_meters,
                                         cell.soil_fertility,
                                         if cell.water_access { "есть" } else { "нет" },
-                                        cell.settlements.join(", ")
+                                        cell.settlements.join(", "),
+                                        cell.resource_sites.join(", ")
                                     );
                                     view! {
                                         <div class=class_name title=title>
@@ -299,6 +317,24 @@ fn WorldDashboard() -> impl IntoView {
                             </div>
                             <div class="map-legend">
                                 <span>"П — равнины"</span><span>"Л — лес"</span><span>"Х — холмы"</span><span>"Г — горы"</span><span>"Р — река"</span>
+                            </div>
+                        </section>
+                        <section class="resource-panel">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ЭКОЛОГИЯ"</p><h3>"Природные ресурсы"</h3></div>
+                                <span>{format!("{} месторождений", current.resource_sites.len())}</span>
+                            </div>
+                            <div class="resource-grid">
+                                {current.resource_sites.into_iter().map(|site| view! {
+                                    <article class="resource-card">
+                                        <p class="eyebrow">{site.kind.to_uppercase()}</p>
+                                        <h3>{site.name}</h3>
+                                        <div class="settlement-stat"><span>"Запас"</span><strong>{format!("{} {}", site.stock, site.unit)}</strong></div>
+                                        <div class="settlement-stat"><span>"Вместимость"</span><strong>{format!("{} {}", site.capacity, site.unit)}</strong></div>
+                                        <div class="settlement-stat"><span>"Восстановление за ход"</span><strong>{format!("{} {}", site.regeneration_per_tick, site.unit)}</strong></div>
+                                        <p class="resource-location">{format!("Участок #{} · {}, {}", site.id, site.x, site.y)}</p>
+                                    </article>
+                                }).collect_view()}
                             </div>
                         </section>
                         <div class="settlement-grid">
