@@ -600,7 +600,7 @@ mod tests {
         .0;
 
         for _ in 0..8 {
-            advance_tick(Path(created.world_id), State(state.clone()))
+            let _response = advance_tick(Path(created.world_id), State(state.clone()))
                 .await
                 .expect("advance tick");
         }
