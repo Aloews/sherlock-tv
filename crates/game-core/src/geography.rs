@@ -140,17 +140,28 @@ impl WorldMap {
         if position.x >= self.width || position.y >= self.height {
             return None;
         }
-        let index = usize::from(position.y) * usize::from(self.width)
-            + usize::from(position.x);
+        let index = usize::from(position.y) * usize::from(self.width) + usize::from(position.x);
         self.cells.get(index)
     }
 
     pub fn neighbors(&self, position: GridPoint) -> Vec<&MapCell> {
         let candidates = [
-            position.x.checked_sub(1).map(|x| GridPoint { x, y: position.y }),
-            position.x.checked_add(1).map(|x| GridPoint { x, y: position.y }),
-            position.y.checked_sub(1).map(|y| GridPoint { x: position.x, y }),
-            position.y.checked_add(1).map(|y| GridPoint { x: position.x, y }),
+            position
+                .x
+                .checked_sub(1)
+                .map(|x| GridPoint { x, y: position.y }),
+            position
+                .x
+                .checked_add(1)
+                .map(|x| GridPoint { x, y: position.y }),
+            position
+                .y
+                .checked_sub(1)
+                .map(|y| GridPoint { x: position.x, y }),
+            position
+                .y
+                .checked_add(1)
+                .map(|y| GridPoint { x: position.x, y }),
         ];
         candidates
             .into_iter()
@@ -177,7 +188,11 @@ impl WorldMap {
             }
         }
         for region in &self.regions {
-            if region.cells.iter().any(|position| self.cell_at(*position).is_none()) {
+            if region
+                .cells
+                .iter()
+                .any(|position| self.cell_at(*position).is_none())
+            {
                 return Err(MapError::InvalidRegionCell);
             }
         }
@@ -209,7 +224,11 @@ mod tests {
             assert_eq!(river.terrain, TerrainKind::River);
             assert!(river.water_access);
         }
-        let covered = map.regions.iter().map(|region| region.cells.len()).sum::<usize>();
+        let covered = map
+            .regions
+            .iter()
+            .map(|region| region.cells.len())
+            .sum::<usize>();
         assert_eq!(covered, usize::from(map.width) * usize::from(map.height));
     }
 

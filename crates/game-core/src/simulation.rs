@@ -453,7 +453,10 @@ mod tests {
         let decoded: WorldState = serde_json::from_str(&encoded).expect("deserialize world");
         assert_eq!(decoded, world);
         assert!(decoded.geography.validate().is_ok());
-        assert_eq!(decoded.event_log.len(), decoded.next_event_sequence as usize);
+        assert_eq!(
+            decoded.event_log.len(),
+            decoded.next_event_sequence as usize
+        );
     }
 
     #[test]
