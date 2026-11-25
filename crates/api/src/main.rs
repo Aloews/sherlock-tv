@@ -88,6 +88,17 @@ struct TickResponse {
     emitted_events: usize,
 }
 
+#[derive(Debug, Serialize)]
+struct ReplayView {
+    world_id: u64,
+    tick: u64,
+    replayed_ticks: u64,
+    event_count: usize,
+    snapshot_matches: bool,
+    event_log_matches: bool,
+    verified: bool,
+}
+
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
@@ -404,12 +415,54 @@ async fn advance_tick(
     }))
 }
 
+async fn verify_replay(
+    Path(world_id): Path<u64>,
+    State(state): State<AppState>,
+) -> Result<Json<ReplayView>, StatusCode> {
+    const MAX_REPLAY_TICKS: u64 = 100_000;
+    let world = load_world(&state.pool, database_id(world_id)?).await?;
+    if world.tick.0 > MAX_REPLAY_TICKS {
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    let mut replayed = WorldState::starter(world.seed);
+    replayed.id = world.id;
+    for event in &mut replayed.event_log {
+        event.world_id = world.id;
+    }
+
+    let engine = SimulationEngine::civilization();
+    for _ in 0..world.tick.0 {
+        engine
+            .advance_tick(&mut replayed)
+            .map_err(|_| StatusCode::CONFLICT)?;
+    }
+
+    let event_log_matches = replayed.event_log == world.event_log;
+    let mut replayed_snapshot = replayed.clone();
+    replayed_snapshot.event_log.clear();
+    let mut stored_snapshot = world.clone();
+    stored_snapshot.event_log.clear();
+    let snapshot_matches = replayed_snapshot == stored_snapshot;
+
+    Ok(Json(ReplayView {
+        world_id: world.id.0,
+        tick: world.tick.0,
+        replayed_ticks: world.tick.0,
+        event_count: world.event_log.len(),
+        snapshot_matches,
+        event_log_matches,
+        verified: snapshot_matches && event_log_matches,
+    }))
+}
+
 fn app(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/api/v1/world", post(create_world))
         .route("/api/v1/world/{world_id}", get(get_world))
         .route("/api/v1/world/{world_id}/tick", post(advance_tick))
+        .route("/api/v1/world/{world_id}/replay", get(verify_replay))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -533,6 +586,34 @@ mod tests {
             .0;
         assert_eq!(loaded.tick, 1);
         assert_eq!(loaded.event_count, response.world.event_count);
+    }
+
+    #[tokio::test]
+    async fn replay_reconstructs_snapshot_and_append_only_event_log() {
+        let state = test_state().await;
+        let created = create_world(
+            State(state.clone()),
+            Json(CreateWorldRequest { seed: Some(2026) }),
+        )
+        .await
+        .expect("world creation")
+        .0;
+
+        for _ in 0..8 {
+            advance_tick(Path(created.world_id), State(state.clone()))
+                .await
+                .expect("advance tick");
+        }
+
+        let replay = verify_replay(Path(created.world_id), State(state))
+            .await
+            .expect("deterministic replay")
+            .0;
+        assert_eq!(replay.tick, 8);
+        assert_eq!(replay.replayed_ticks, 8);
+        assert!(replay.snapshot_matches);
+        assert!(replay.event_log_matches);
+        assert!(replay.verified);
     }
 
     #[tokio::test]
