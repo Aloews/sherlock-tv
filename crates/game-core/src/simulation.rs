@@ -173,12 +173,19 @@ impl SimulationSystem for CivilizationSystem {
                 .checked_add(production)
                 .ok_or_else(|| SystemError::new("food stock overflow"))?;
             let new_food = available.saturating_sub(consumption);
-            let food_delta = i64::try_from(new_food).unwrap_or(i64::MAX)
-                - i64::try_from(food).unwrap_or(i64::MAX);
+            let new_food_delta_value = i64::try_from(new_food)
+                .map_err(|_| SystemError::new("food stock exceeds event delta range"))?;
+            let previous_food_value = i64::try_from(food)
+                .map_err(|_| SystemError::new("food stock exceeds event delta range"))?;
+            let food_delta = new_food_delta_value
+                .checked_sub(previous_food_value)
+                .ok_or_else(|| SystemError::new("food event delta overflow"))?;
             entity.attributes.insert("food".into(), new_food.into());
             let new_timber = timber
                 .checked_add(timber_regeneration)
                 .ok_or_else(|| SystemError::new("timber stock overflow"))?;
+            let timber_delta = i64::try_from(timber_regeneration)
+                .map_err(|_| SystemError::new("timber regeneration exceeds event delta range"))?;
             entity.attributes.insert("timber".into(), new_timber.into());
             if food_delta != 0 {
                 drafts.push(EventDraft {
@@ -201,7 +208,7 @@ impl SimulationSystem for CivilizationSystem {
                 payload: EventPayload::ResourceStockChanged {
                     site_id: id,
                     resource: "timber".into(),
-                    delta: i64::try_from(timber_regeneration).unwrap_or(i64::MAX),
+                    delta: timber_delta,
                 },
             });
 
@@ -376,6 +383,22 @@ mod tests {
         );
         assert_eq!(left.entities[&EntityId(1)].attributes["food"], 910);
         assert_eq!(left.entities[&EntityId(1)].attributes["timber"], 518);
+    }
+
+    #[test]
+    fn food_delta_out_of_range_fails_tick_without_mutation() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(42);
+        world
+            .entities
+            .get_mut(&EntityId(1))
+            .expect("starter settlement")
+            .attributes
+            .insert("food".into(), (i64::MAX as u64 + 1).into());
+        let before = world.clone();
+
+        assert!(engine.advance_tick(&mut world).is_err());
+        assert_eq!(world, before);
     }
 
     #[test]
