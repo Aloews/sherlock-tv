@@ -13,8 +13,18 @@ struct WorldView {
     tick: u64,
     ruleset_version: u32,
     entity_count: usize,
-    event_count: u64,
+    event_count: usize,
     settlements: Vec<SettlementView>,
+    recent_events: Vec<EventView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct EventView {
+    tick: u64,
+    sequence: u64,
+    actor: String,
+    cause: String,
+    event_type: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -137,6 +147,21 @@ fn WorldDashboard() -> impl IntoView {
                                 </article>
                             }).collect_view()}
                         </div>
+                        <section class="event-history">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ХРОНИКА"</p><h3>"Последние события"</h3></div>
+                                <span>{format!("{} записей", current.event_count)}</span>
+                            </div>
+                            <div class="event-list">
+                                {current.recent_events.into_iter().map(|event| view! {
+                                    <article class="event-row">
+                                        <span class="event-tick">{format!("ХОД {}", event.tick)}</span>
+                                        <div><strong>{event.event_type}</strong><p>{format!("{} · {}", event.actor, event.cause)}</p></div>
+                                        <span class="event-sequence">{format!("#{}", event.sequence)}</span>
+                                    </article>
+                                }).collect_view()}
+                            </div>
+                        </section>
                         <p class="entity-note">{format!("Всего сущностей в мире: {}", current.entity_count)}</p>
                     </section>
                 })}
