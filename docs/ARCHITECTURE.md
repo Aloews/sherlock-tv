@@ -35,3 +35,8 @@ The API exposes versioned contracts; infrastructure health is separate from appl
 ## Persistence boundary
 
 The next persistence milestone will add PostgreSQL snapshots and append-only events in a single transaction. No production database or legacy credentials are connected by this foundation.
+
+
+## Starter geography units
+
+The starter map is an 8 × 6 grid. Coordinates are zero-based integer cell indices; adjacency is orthogonal (north, south, east, west). Elevation is measured in meters. Soil fertility is a dimensionless index from 0 to 100. Food and timber stocks, production and consumption are abstract simulation units, not kilograms or tonnes. Treasury is an integer monetary balance in abstract minor units; tax rates are basis points. Starter values are model assumptions, not historical observations. The initial scenario event records the starter-scenario assumption provenance.
