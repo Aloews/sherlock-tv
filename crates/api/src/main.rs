@@ -32,6 +32,8 @@ struct CreateWorldRequest {
 struct SettlementView {
     id: u64,
     name: String,
+    x: u16,
+    y: u16,
     population: u64,
     food: u64,
     timber: u64,
@@ -47,6 +49,7 @@ struct MapCellView {
     elevation_meters: u16,
     soil_fertility: u8,
     water_access: bool,
+    settlements: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -145,9 +148,12 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
                     .and_then(serde_json::Value::as_u64)
                     .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
             };
+            let position = entity.location.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
             Ok(SettlementView {
                 id: entity.id.0,
                 name: entity.name.clone(),
+                x: position.x,
+                y: position.y,
                 population: number("population")?,
                 food: number("food")?,
                 timber: number("timber")?,
@@ -171,6 +177,15 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
                 elevation_meters: cell.elevation_meters,
                 soil_fertility: cell.soil_fertility,
                 water_access: cell.water_access,
+                settlements: world
+                    .entities
+                    .values()
+                    .filter(|entity| {
+                        entity.kind == EntityKind::Settlement
+                            && entity.location == Some(cell.position)
+                    })
+                    .map(|entity| entity.name.clone())
+                    .collect(),
             })
             .collect(),
     };
@@ -291,6 +306,8 @@ mod tests {
         assert_eq!(view.seed, 77);
         assert_eq!(view.tick, 0);
         assert_eq!(view.settlements.len(), 2);
+        assert_eq!((view.settlements[0].x, view.settlements[0].y), (2, 2));
+        assert_eq!((view.settlements[1].x, view.settlements[1].y), (5, 4));
         assert_eq!(
             view.settlements.iter().map(|s| s.population).sum::<u64>(),
             200
