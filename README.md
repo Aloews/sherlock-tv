@@ -16,12 +16,12 @@ The repository is a clean rebuild. No legacy Sherlock football application code 
 
 ## Run locally
 
-Requires stable Rust, Docker Compose, the `wasm32-unknown-unknown` target and Trunk.
+Requires stable Rust, Docker, the `wasm32-unknown-unknown` target and Trunk.
 
 1. Start PostgreSQL:
 
 ```sh
-docker compose up -d postgres
+docker run --name sherlock-postgres -e POSTGRES_USER=sherlock -e POSTGRES_PASSWORD=sherlock -e POSTGRES_DB=sherlock -p 5432:5432 -d postgres:16
 ```
 
 2. Export the local development connection string:
@@ -56,7 +56,7 @@ Open the local Trunk URL. Set the API address in the client to the reachable API
 - `POST /api/v1/world/{world_id}/tick` — atomically advance one tick, persist the new snapshot and append events.
 - `GET /api/v1/world/{world_id}/replay` — rebuild from the seed and verify the stored snapshot and event history.
 
-The starter world is a prototype scenario with abstract food, timber and treasury units. It is not a historical reconstruction. PostgreSQL stores one JSONB state snapshot per tick and a separate append-only event stream. The current schema does not yet provide replay from genesis, authentication, multi-user authorization or production hardening.
+The starter world is a prototype scenario with abstract food, timber and treasury units. It is not a historical reconstruction. PostgreSQL stores one JSONB state snapshot per tick and a separate append-only event stream. The replay endpoint reconstructs the world from its starter seed and committed ticks, then compares both the current snapshot and event stream. Replay checkpoints, schema-upgrade compatibility, authentication, multi-user authorization and production hardening are not implemented yet.
 
 ## Quality gates
 
