@@ -606,6 +606,19 @@ mod tests {
             .find(|cell| cell.x == 2 && cell.y == 2)
             .expect("settlement map cell");
         assert_eq!(river_cell.settlements, vec!["Речной край"]);
+        let forest = created
+            .resource_sites
+            .iter()
+            .find(|site| site.kind == "forest_biomass")
+            .expect("starter forest resource");
+        let forest_cell = created
+            .map
+            .cells
+            .iter()
+            .find(|cell| cell.x == forest.x && cell.y == forest.y)
+            .expect("forest map cell");
+        assert!(forest_cell.resource_sites.contains(&forest.name));
+        assert_eq!(forest.unit, "м³");
         let loaded = get_world(Path(created.world_id), State(state))
             .await
             .expect("load persisted world")
@@ -632,6 +645,14 @@ mod tests {
         assert!(response.emitted_events >= 5);
         assert_eq!(response.world.settlements[0].food, 910);
         assert_eq!(response.world.settlements[0].timber, 518);
+        let forest = response
+            .world
+            .resource_sites
+            .iter()
+            .find(|site| site.kind == "forest_biomass")
+            .expect("forest resource after tick");
+        assert_eq!(forest.stock, 858);
+        assert_eq!(forest.regeneration_per_tick, 8);
         assert_eq!(response.world.event_count, 1 + response.emitted_events);
         let loaded = get_world(Path(created.world_id), State(state))
             .await
