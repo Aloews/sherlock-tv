@@ -6,9 +6,9 @@ The workspace follows the separation proven in Aloews/Sherlock, adapted to a civ
 
 - `game-core`: pure Rust world domain, entity model, event envelope, simulation system contract, deterministic scheduler and transaction boundary. No HTTP, browser, database or UI dependencies.
 - `dynasty-core`: family relationships, kinship, succession and inheritance rules. It is a domain subsystem, not a standalone football career mode.
-- `api`: Axum transport, application state, versioned routes, request validation and serialization. Domain rules remain in core crates.
+- `api`: Axum transport, SQLx/PostgreSQL persistence adapter, versioned routes, request validation and serialization. Domain rules remain in core crates.
 - `web`: Leptos client compiled to WebAssembly. It owns presentation and user interaction, not simulation truth.
-- Future persistence adapters will own PostgreSQL snapshots and append-only event storage. Historical-source adapters will preserve source identity, timestamp, interpretation and uncertainty.
+- Historical-source adapters will preserve source identity, timestamp, interpretation and uncertainty.
 
 ## Dependency direction
 
@@ -32,9 +32,6 @@ Random streams are independent per system so adding a new system does not pertur
 
 The API exposes versioned contracts; infrastructure health is separate from application readiness. The client must represent loading, empty, unavailable, partial and error states distinctly. Missing values are never silently converted to zero.
 
-## Persistence boundary
-
-The next persistence milestone will add PostgreSQL snapshots and append-only events in a single transaction. No production database or legacy credentials are connected by this foundation.
 
 
 ## Starter geography units
@@ -44,4 +41,9 @@ The starter map is an 8 × 6 grid. Coordinates are zero-based integer cell indic
 
 ## Persistence boundary
 
-The API stores one authoritative JSONB world snapshot per world and an append-only event row for each committed event. Event history is deliberately excluded from JSONB snapshots and rehydrated from the event table, avoiding quadratic snapshot growth. Each successful tick updates the current world snapshot, appends a tick snapshot and inserts all events in one PostgreSQL transaction while holding a row lock for that world. A failed simulation tick leaves the stored snapshot and event log unchanged. The current schema does not yet implement deterministic replay, event compaction, schema-upgrade compatibility for historical snapshots, or multi-user authorization.
+The API stores one authoritative JSONB world snapshot per world and an append-only event row for each committed event. Event history is deliberately excluded from JSONB snapshots and rehydrated from the event table, avoiding quadratic snapshot growth. Each successful tick updates the current world snapshot, appends a tick snapshot and inserts all events in one PostgreSQL transaction while holding a row lock for that world. A failed simulation tick leaves the stored snapshot and event log unchanged. Read paths load the snapshot and event rows in one repeatable-read transaction so concurrent ticks cannot produce a mixed view. The replay endpoint rebuilds the initial scenario for the snapshot's ruleset version, replays committed ticks and compares both domain state and the append-only event log. Ruleset v1 retains the original settlement-only starter; ruleset v2 adds ecological resource sites and deterministic regeneration. The current schema does not yet implement replay checkpoints, event compaction, schema-upgrade migrations for historical snapshots, or multi-user authorization.
+
+
+## Ecological resources
+
+Ruleset v2 creates spatial resource sites from terrain: fish in river cells, timber in forests, stone in hills, iron in mountains and wild food on sufficiently fertile plains. Each site has a typed resource kind, map coordinate, current stock, capacity and regeneration units per tick. Renewable stock is capped at capacity; non-renewable deposits do not regenerate. Resource changes are emitted as causal events. The quantities are abstract simulation units, not measured historical production. Resource extraction, consumption, transport and ecological carrying capacity are not implemented yet.
