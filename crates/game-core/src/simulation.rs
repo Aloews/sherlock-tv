@@ -514,7 +514,7 @@ mod tests {
         let decoded: WorldState =
             serde_json::from_value(snapshot).expect("deserialize legacy snapshot");
         assert!(decoded.resource_sites.is_empty());
-        assert_eq!(decoded.ruleset_version, 2);
+        assert_eq!(decoded.ruleset_version, 3);
     }
 
     #[test]
