@@ -532,7 +532,10 @@ mod tests {
             world.add_resource_site(
                 "Outside map".into(),
                 crate::world::ResourceKind::Stone,
-                crate::geography::GridPoint { x: u16::MAX, y: u16::MAX },
+                crate::geography::GridPoint {
+                    x: u16::MAX,
+                    y: u16::MAX,
+                },
                 0,
                 10,
                 0,
@@ -546,7 +549,11 @@ mod tests {
     fn invalid_resource_site_state_rejects_tick_without_mutation() {
         let engine = SimulationEngine::civilization();
         let mut world = WorldState::starter(43);
-        let site = world.resource_sites.values_mut().next().expect("resource site");
+        let site = world
+            .resource_sites
+            .values_mut()
+            .next()
+            .expect("resource site");
         site.stock = site.capacity + 1;
         let before = world.clone();
 
