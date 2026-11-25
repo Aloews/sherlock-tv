@@ -149,6 +149,11 @@ mod tests {
             .expect("ecology tick");
         assert_eq!(world.resource_sites[&id].stock_units, 100);
         assert_eq!(events.len(), 1);
+        let next_events = SimulationEngine::new(vec![Box::new(EcologySystem)])
+            .advance_tick(&mut world)
+            .expect("second ecology tick");
+        assert!(next_events.is_empty());
+        assert_eq!(world.resource_sites[&id].stock_units, 100);
         assert!(matches!(
             &events[0].payload,
             EventPayload::ResourceStockChanged {
