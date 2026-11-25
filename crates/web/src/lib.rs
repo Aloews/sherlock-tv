@@ -181,12 +181,11 @@ fn WorldDashboard() -> impl IntoView {
         set_status.set("Проверяем историю симуляции…".into());
         leptos::task::spawn_local(async move {
             let result = async {
-                let response = gloo_net::http::Request::get(&format!(
-                    "{base}/api/v1/world/{id}/replay"
-                ))
-                .send()
-                .await
-                .map_err(|error| error.to_string())?;
+                let response =
+                    gloo_net::http::Request::get(&format!("{base}/api/v1/world/{id}/replay"))
+                        .send()
+                        .await
+                        .map_err(|error| error.to_string())?;
                 if !response.ok() {
                     return Err(format!("API вернул HTTP {}", response.status()));
                 }
@@ -199,7 +198,10 @@ fn WorldDashboard() -> impl IntoView {
             match result {
                 Ok(replay) => {
                     set_status.set(if replay.verified {
-                        format!("История мира {} подтверждена повторным расчётом.", replay.world_id)
+                        format!(
+                            "История мира {} подтверждена повторным расчётом.",
+                            replay.world_id
+                        )
                     } else {
                         "Обнаружено расхождение между снимком и историей событий.".into()
                     });
