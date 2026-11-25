@@ -1,20 +1,22 @@
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldState,
+    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, Tick, WorldId,
+    WorldState,
 };
-use std::{env, net::SocketAddr, sync::Arc};
-use tokio::{net::TcpListener, sync::RwLock};
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::{env, net::SocketAddr};
+use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 #[derive(Clone)]
 struct AppState {
-    world: Arc<RwLock<Option<WorldState>>>,
+    pool: PgPool,
 }
 
 #[derive(Serialize)]
@@ -217,31 +219,167 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
     })
 }
 
-async fn get_world(State(state): State<AppState>) -> Result<Json<WorldView>, StatusCode> {
-    let guard = state.world.read().await;
-    let world = guard.as_ref().ok_or(StatusCode::NOT_FOUND)?;
-    Ok(Json(world_view(world)?))
+fn database_id(world_id: u64) -> Result<i64, StatusCode> {
+    i64::try_from(world_id).map_err(|_| StatusCode::NOT_FOUND)
+}
+
+async fn load_world(pool: &PgPool, world_id: i64) -> Result<WorldState, StatusCode> {
+    let snapshot = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT current_snapshot FROM worlds WHERE id = $1",
+    )
+    .bind(world_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn insert_events(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    world_id: i64,
+    events: &[EventEnvelope],
+) -> Result<(), StatusCode> {
+    for event in events {
+        let sequence =
+            i64::try_from(event.sequence).map_err(|_| StatusCode::CONFLICT)?;
+        let tick = i64::try_from(event.tick.0).map_err(|_| StatusCode::CONFLICT)?;
+        let payload =
+            serde_json::to_value(event).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        sqlx::query(
+            "INSERT INTO world_events (world_id, sequence, tick, event_type, event) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(world_id)
+        .bind(sequence)
+        .bind(tick)
+        .bind(event_type(event))
+        .bind(payload)
+        .execute(&mut **transaction)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    Ok(())
 }
 
 async fn create_world(
     State(state): State<AppState>,
     Json(request): Json<CreateWorldRequest>,
 ) -> Result<Json<WorldView>, StatusCode> {
-    let mut guard = state.world.write().await;
-    let world = WorldState::starter(request.seed.unwrap_or(42));
-    let view = world_view(&world)?;
-    *guard = Some(world);
-    Ok(Json(view))
+    let seed = request.seed.unwrap_or(42);
+    let database_seed = i64::try_from(seed).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let mut transaction = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut world = WorldState::starter(seed);
+    let world_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO worlds (seed, ruleset_version, tick) VALUES ($1, $2, 0) RETURNING id",
+    )
+    .bind(database_seed)
+    .bind(i32::try_from(world.ruleset_version).map_err(|_| StatusCode::BAD_REQUEST)?)
+    .fetch_one(&mut *transaction)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    world.id = WorldId(u64::try_from(world_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
+    for event in &mut world.event_log {
+        event.world_id = world.id;
+    }
+    let snapshot =
+        serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
+        .bind(world_id)
+        .bind(&snapshot)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query(
+        "INSERT INTO world_snapshots (world_id, tick, ruleset_version, state) VALUES ($1, 0, $2, $3)",
+    )
+    .bind(world_id)
+    .bind(i32::try_from(world.ruleset_version).map_err(|_| StatusCode::BAD_REQUEST)?)
+    .bind(snapshot)
+    .execute(&mut *transaction)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    insert_events(&mut transaction, world_id, &world.event_log).await?;
+    transaction
+        .commit()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(world_view(&world)?))
 }
 
-async fn advance_tick(State(state): State<AppState>) -> Result<Json<TickResponse>, StatusCode> {
-    let mut guard = state.world.write().await;
-    let world = guard.as_mut().ok_or(StatusCode::NOT_FOUND)?;
+async fn get_world(
+    Path(world_id): Path<u64>,
+    State(state): State<AppState>,
+) -> Result<Json<WorldView>, StatusCode> {
+    let world = load_world(&state.pool, database_id(world_id)?).await?;
+    Ok(Json(world_view(&world)?))
+}
+
+async fn advance_tick(
+    Path(world_id): Path<u64>,
+    State(state): State<AppState>,
+) -> Result<Json<TickResponse>, StatusCode> {
+    let database_id = database_id(world_id)?;
+    let mut transaction = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let snapshot = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT current_snapshot FROM worlds WHERE id = $1 FOR UPDATE",
+    )
+    .bind(database_id)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
+    let mut world: WorldState =
+        serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let previous_event_count = world.event_log.len();
     let events = SimulationEngine::civilization()
-        .advance_tick(world)
+        .advance_tick(&mut world)
         .map_err(|_| StatusCode::CONFLICT)?;
+    let snapshot =
+        serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tick = i64::try_from(world.tick.0).map_err(|_| StatusCode::CONFLICT)?;
+    sqlx::query(
+        "UPDATE worlds SET tick = $2, current_snapshot = $3, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(database_id)
+    .bind(tick)
+    .bind(&snapshot)
+    .execute(&mut *transaction)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query(
+        "INSERT INTO world_snapshots (world_id, tick, ruleset_version, state) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(database_id)
+    .bind(tick)
+    .bind(i32::try_from(world.ruleset_version).map_err(|_| StatusCode::BAD_REQUEST)?)
+    .bind(snapshot)
+    .execute(&mut *transaction)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    insert_events(
+        &mut transaction,
+        database_id,
+        &world.event_log[previous_event_count..],
+    )
+    .await?;
+    transaction
+        .commit()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(Json(TickResponse {
-        world: world_view(world)?,
+        world: world_view(&world)?,
         emitted_events: events.len(),
     }))
 }
@@ -249,8 +387,9 @@ async fn advance_tick(State(state): State<AppState>) -> Result<Json<TickResponse
 fn app(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(health))
-        .route("/api/v1/world", get(get_world).post(create_world))
-        .route("/api/v1/world/tick", post(advance_tick))
+        .route("/api/v1/world", post(create_world))
+        .route("/api/v1/world/{world_id}", get(get_world))
+        .route("/api/v1/world/{world_id}/tick", post(advance_tick))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -264,9 +403,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    let state = AppState {
-        world: Arc::new(RwLock::new(None)),
-    };
+    let database_url = env::var("DATABASE_URL")?;
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    let state = AppState { pool };
     let address: SocketAddr = env::var("SHERLOCK_BIND")
         .unwrap_or_else(|_| "0.0.0.0:8080".into())
         .parse()?;
@@ -280,10 +424,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
 
-    fn state() -> AppState {
-        AppState {
-            world: Arc::new(RwLock::new(None)),
-        }
+    async fn test_state() -> AppState {
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is set for integration tests");
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&database_url)
+            .await
+            .expect("connect test database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("apply test migrations");
+        AppState { pool }
     }
 
     #[tokio::test]
@@ -294,94 +446,115 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn world_is_created_with_two_settlements_and_requested_seed() {
-        let state = state();
-        let view = create_world(
+    async fn world_is_created_persisted_and_loaded_with_geography() {
+        let state = test_state().await;
+        let created = create_world(
             State(state.clone()),
             Json(CreateWorldRequest { seed: Some(77) }),
         )
         .await
         .expect("world creation")
         .0;
-        assert_eq!(view.seed, 77);
-        assert_eq!(view.tick, 0);
-        assert_eq!(view.settlements.len(), 2);
-        assert_eq!((view.settlements[0].x, view.settlements[0].y), (2, 2));
-        assert_eq!((view.settlements[1].x, view.settlements[1].y), (5, 4));
-        assert_eq!(
-            view.settlements.iter().map(|s| s.population).sum::<u64>(),
-            200
-        );
-        assert_eq!(view.event_count, 1);
-        assert_eq!(view.map.width, 8);
-        assert_eq!(view.map.height, 6);
-        assert_eq!(view.map.cells.len(), 48);
-        assert_eq!(
-            get_world(State(state)).await.expect("world exists").0.seed,
-            77
-        );
+        assert_eq!(created.seed, 77);
+        assert_eq!(created.tick, 0);
+        assert_eq!(created.settlements.len(), 2);
+        assert_eq!((created.settlements[0].x, created.settlements[0].y), (2, 2));
+        assert_eq!((created.settlements[1].x, created.settlements[1].y), (5, 4));
+        assert_eq!(created.settlements.iter().map(|s| s.population).sum::<u64>(), 200);
+        assert_eq!(created.event_count, 1);
+        assert_eq!(created.map.width, 8);
+        assert_eq!(created.map.height, 6);
+        assert_eq!(created.map.cells.len(), 48);
+        let river_cell = created
+            .map
+            .cells
+            .iter()
+            .find(|cell| cell.x == 2 && cell.y == 2)
+            .expect("settlement map cell");
+        assert_eq!(river_cell.settlements, vec!["Речной край"]);
+        let loaded = get_world(Path(created.world_id), State(state))
+            .await
+            .expect("load persisted world")
+            .0;
+        assert_eq!(loaded.world_id, created.world_id);
+        assert_eq!(loaded.event_count, created.event_count);
     }
 
     #[tokio::test]
-    async fn tick_advances_economy_and_appends_causal_events() {
-        let state = state();
+    async fn tick_advances_and_persists_snapshot_and_events_atomically() {
+        let state = test_state().await;
         let created = create_world(
             State(state.clone()),
             Json(CreateWorldRequest { seed: Some(42) }),
         )
         .await
-        .expect("world creation");
-        assert_eq!(created.0.tick, 0);
-        let response = advance_tick(State(state.clone())).await.expect("tick").0;
+        .expect("world creation")
+        .0;
+        let response = advance_tick(Path(created.world_id), State(state.clone()))
+            .await
+            .expect("tick")
+            .0;
         assert_eq!(response.world.tick, 1);
         assert!(response.emitted_events >= 5);
         assert_eq!(response.world.settlements[0].food, 910);
         assert_eq!(response.world.settlements[0].timber, 518);
         assert_eq!(response.world.event_count, 1 + response.emitted_events);
-        assert!(
-            response
-                .world
-                .recent_events
-                .iter()
-                .any(|event| { event.tick == 1 && event.event_type == "tick_advanced" })
-        );
-        assert_eq!(
-            get_world(State(state)).await.expect("world").0.event_count,
-            response.world.event_count
-        );
+        let loaded = get_world(Path(created.world_id), State(state))
+            .await
+            .expect("load persisted world")
+            .0;
+        assert_eq!(loaded.tick, 1);
+        assert_eq!(loaded.event_count, response.world.event_count);
     }
 
     #[tokio::test]
     async fn missing_world_returns_not_found() {
+        let state = test_state().await;
         assert_eq!(
-            get_world(State(state())).await.unwrap_err(),
+            get_world(Path(u64::MAX), State(state.clone()))
+                .await
+                .unwrap_err(),
             StatusCode::NOT_FOUND
         );
         assert_eq!(
-            advance_tick(State(state())).await.unwrap_err(),
+            advance_tick(Path(u64::MAX), State(state))
+                .await
+                .unwrap_err(),
             StatusCode::NOT_FOUND
         );
     }
 
     #[tokio::test]
-    async fn tick_overflow_returns_conflict_without_mutating_world() {
-        let state = state();
+    async fn tick_overflow_returns_conflict_without_mutating_snapshot() {
+        let state = test_state().await;
         let created = create_world(
             State(state.clone()),
-            Json(CreateWorldRequest { seed: Some(42) }),
+            Json(CreateWorldRequest { seed: Some(43) }),
         )
         .await
-        .expect("world creation");
-        assert_eq!(created.0.tick, 0);
-        state.world.write().await.as_mut().expect("world").tick =
-            sherlock_game_core::Tick(u64::MAX);
+        .expect("world creation")
+        .0;
+        let database_id = database_id(created.world_id).expect("database id");
+        let mut world = load_world(&state.pool, database_id).await.expect("load world");
+        world.tick = Tick(u64::MAX);
+        let snapshot = serde_json::to_value(&world).expect("serialize overflow snapshot");
+        sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
+            .bind(database_id)
+            .bind(snapshot)
+            .execute(&state.pool)
+            .await
+            .expect("store overflow fixture");
+
         assert_eq!(
-            advance_tick(State(state.clone())).await.unwrap_err(),
+            advance_tick(Path(created.world_id), State(state.clone()))
+                .await
+                .unwrap_err(),
             StatusCode::CONFLICT
         );
-        assert_eq!(
-            state.world.read().await.as_ref().expect("world").tick.0,
-            u64::MAX
-        );
+        let after = load_world(&state.pool, database_id)
+            .await
+            .expect("load world after rejected tick");
+        assert_eq!(after.tick, Tick(u64::MAX));
+        assert_eq!(after.event_log.len(), created.event_count);
     }
 }
