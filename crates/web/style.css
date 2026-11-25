@@ -67,3 +67,14 @@ footer { padding-top: 20px; border-top: 1px solid #ffffff20; }
 .event-row p { margin: 4px 0 0; color: #91a1b3; font-size: 11px; }
 .event-sequence { text-align: right; }
 @media (max-width: 480px) { .event-row { grid-template-columns: 64px minmax(0, 1fr) 34px; gap: 8px; } }
+
+
+.map-panel { margin: 30px 0 34px; }
+.world-map { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; padding: 10px; border: 1px solid #ffffff1a; border-radius: 12px; background: #0c141c; }
+.map-cell { display: grid; place-items: center; aspect-ratio: 1.35; min-width: 0; border: 1px solid #ffffff14; border-radius: 5px; color: #e8eef2; font-size: 12px; font-weight: 700; }
+.terrain-plains { background: #697d61; }
+.terrain-forest { background: #315b4a; }
+.terrain-hills { background: #857452; }
+.terrain-mountain { background: #777e83; }
+.terrain-river { background: #376f91; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: #91a1b3; font-size: 10px; }
