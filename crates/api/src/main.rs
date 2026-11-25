@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldId, WorldState,
+    EntityKind, EventEnvelope, EventPayload, ResourceKind, SimulationEngine, TerrainKind, WorldId, WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, net::SocketAddr};
@@ -51,6 +51,18 @@ struct MapCellView {
     soil_fertility: u8,
     water_access: bool,
     settlements: Vec<String>,
+    resources: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResourceSiteView {
+    id: u64,
+    kind: &'static str,
+    x: u16,
+    y: u16,
+    stock_units: u64,
+    capacity_units: u64,
+    regeneration_units_per_tick: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -78,6 +90,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    resource_sites: Vec<ResourceSiteView>,
     map: MapView,
     recent_events: Vec<EventView>,
 }
@@ -147,6 +160,10 @@ fn climate_name(climate: sherlock_game_core::ClimateBand) -> &'static str {
     }
 }
 
+fn resource_name(kind: ResourceKind) -> &'static str {
+    kind.as_str()
+}
+
 fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
     let settlements = world
         .entities
@@ -198,9 +215,29 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
                     })
                     .map(|entity| entity.name.clone())
                     .collect(),
+                resources: world
+                    .resource_sites
+                    .values()
+                    .filter(|site| site.location == cell.position)
+                    .map(|site| format!("{}: {}", resource_name(site.kind), site.stock_units))
+                    .collect(),
             })
             .collect(),
     };
+
+    let resource_sites = world
+        .resource_sites
+        .values()
+        .map(|site| ResourceSiteView {
+            id: site.id.0,
+            kind: resource_name(site.kind),
+            x: site.location.x,
+            y: site.location.y,
+            stock_units: site.stock_units,
+            capacity_units: site.capacity_units,
+            regeneration_units_per_tick: site.regeneration_units_per_tick,
+        })
+        .collect();
 
     let recent_events = world
         .event_log
@@ -224,6 +261,7 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
         entity_count: world.entities.len(),
         event_count: world.event_log.len(),
         settlements,
+        resource_sites,
         map,
         recent_events,
     })
@@ -313,7 +351,7 @@ async fn create_world(
         .begin()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut world = WorldState::starter(seed);
+    let mut world = WorldState::starter_v2(seed);
     let world_id = sqlx::query_scalar::<_, i64>(
         "INSERT INTO worlds (seed, ruleset_version, tick) VALUES ($1, $2, 0) RETURNING id",
     )
@@ -433,7 +471,8 @@ async fn verify_replay(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    let mut replayed = WorldState::starter(world.seed);
+    let mut replayed = WorldState::starter_for_ruleset(world.seed, world.ruleset_version)
+        .ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
     replayed.id = world.id;
     for event in &mut replayed.event_log {
         event.world_id = world.id;
@@ -551,6 +590,8 @@ mod tests {
             200
         );
         assert_eq!(created.event_count, 1);
+        assert!(!created.resource_sites.is_empty());
+        assert!(created.resource_sites.iter().all(|site| site.stock_units <= site.capacity_units));
         assert_eq!(created.map.width, 8);
         assert_eq!(created.map.height, 6);
         assert_eq!(created.map.cells.len(), 48);
@@ -588,6 +629,9 @@ mod tests {
         assert_eq!(response.world.settlements[0].food, 910);
         assert_eq!(response.world.settlements[0].timber, 518);
         assert_eq!(response.world.event_count, 1 + response.emitted_events);
+        assert!(response.world.resource_sites.iter().any(|site| {
+            site.regeneration_units_per_tick > 0 && site.stock_units > 0
+        }));
         let loaded = get_world(Path(created.world_id), State(state))
             .await
             .expect("load persisted world")
