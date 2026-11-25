@@ -17,6 +17,8 @@ use crate::geography::{GridPoint, WorldMap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub const CURRENT_RULESET_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct WorldId(pub u64);
@@ -151,6 +153,7 @@ pub struct WorldState {
     pub event_log: Vec<EventEnvelope>,
     pub geography: WorldMap,
     pub entities: BTreeMap<EntityId, EntityRecord>,
+    #[serde(default)]
     pub resource_sites: BTreeMap<EntityId, ResourceSite>,
 }
 
@@ -238,7 +241,7 @@ impl WorldState {
     }
 
     pub fn starter(seed: u64) -> Self {
-        let mut world = Self::new(seed, 1);
+        let mut world = Self::new(seed, CURRENT_RULESET_VERSION);
         let river = world
             .register_entity(EntityKind::Settlement, "Речной край".into())
             .expect("initial entity id");
