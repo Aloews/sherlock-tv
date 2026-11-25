@@ -15,7 +15,7 @@
 
 - [~] Scenario creation and versioned world seed — starter scenario exists; seed controls world identity and deterministic simulation streams; initial scenario event is recorded.
 - [~] Population, food, renewable timber and treasury transitions — initial settlement-level economy exists; cohort/household detail remains.
-- [ ] Geography, climate, hydrology and spatial resource locations.
+- [~] Typed grid geography, deterministic 8×6 starter map, terrain, climate bands, elevation, soil fertility, river corridor, water access, regions and adjacency; hydrology and spatial resource sites remain.
 - [ ] Population cohorts, households, skills, health and migration.
 - [ ] Labor, production functions, inventories, logistics and trade across settlements.
 - [ ] Money, double-entry accounting, firms, credit and debt.
