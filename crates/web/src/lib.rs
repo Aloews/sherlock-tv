@@ -126,7 +126,7 @@ fn WorldDashboard() -> impl IntoView {
                 {move || world.get().map(|current| view! {
                     <section class="world-panel">
                         <div class="world-heading">
-                            <div><p class="eyebrow">"ТЕКУЩЕЕ СОСТОЯНИЕ"</p><h2>"Мир #{current.world_id}"</h2></div>
+                            <div><p class="eyebrow">"ТЕКУЩЕЕ СОСТОЯНИЕ"</p><h2>{format!("Мир #{}", current.world_id)}</h2></div>
                             <div class="tick-counter"><span>"ХОД"</span><strong>{current.tick}</strong></div>
                         </div>
                         <div class="metrics-grid">
