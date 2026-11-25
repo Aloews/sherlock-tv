@@ -1,4 +1,7 @@
-use crate::geography::{GridPoint, WorldMap};
+use crate::{
+    ecology::{ResourceKind, ResourceSite},
+    geography::{GridPoint, TerrainKind, WorldMap},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -135,6 +138,8 @@ pub struct WorldState {
     #[serde(skip)]
     pub event_log: Vec<EventEnvelope>,
     pub geography: WorldMap,
+    #[serde(default)]
+    pub resource_sites: BTreeMap<EntityId, ResourceSite>,
     pub entities: BTreeMap<EntityId, EntityRecord>,
 }
 
@@ -158,18 +163,26 @@ impl WorldState {
             next_event_sequence: 0,
             event_log: Vec::new(),
             geography: WorldMap::starter(seed),
+            resource_sites: BTreeMap::new(),
             entities: BTreeMap::new(),
         }
     }
 
     pub fn starter(seed: u64) -> Self {
-        let mut world = Self::new(seed, 1);
-        let river = world
-            .register_entity(EntityKind::Settlement, "Речной край".into())
-            .expect("initial entity id");
-        let hill = world
-            .register_entity(EntityKind::Settlement, "Каменный холм".into())
-            .expect("initial entity id");
+        Self::starter_for_ruleset(seed, 1).expect("supported starter ruleset")
+    }
+
+    pub fn starter_v2(seed: u64) -> Self {
+        Self::starter_for_ruleset(seed, 2).expect("supported starter ruleset")
+    }
+
+    pub fn starter_for_ruleset(seed: u64, ruleset_version: u32) -> Option<Self> {
+        if !(1..=2).contains(&ruleset_version) {
+            return None;
+        }
+        let mut world = Self::new(seed, ruleset_version);
+        let river = world.register_entity(EntityKind::Settlement, "Речной край".into())?;
+        let hill = world.register_entity(EntityKind::Settlement, "Каменный холм".into())?;
         world.settlement_attributes(
             river,
             SettlementSetup {
@@ -194,6 +207,63 @@ impl WorldState {
                 timber_regeneration: 12,
             },
         );
+
+        if ruleset_version >= 2 {
+            let cells = world.geography.cells.clone();
+            for cell in cells {
+                let site = match cell.terrain {
+                    TerrainKind::River => Some((
+                        ResourceKind::Fish,
+                        180 + u64::from(cell.soil_fertility),
+                        400,
+                        12,
+                        "Рыбные угодья",
+                    )),
+                    TerrainKind::Forest => Some((
+                        ResourceKind::Timber,
+                        350 + u64::from(cell.soil_fertility),
+                        800,
+                        15,
+                        "Лесные угодья",
+                    )),
+                    TerrainKind::Hills => Some((
+                        ResourceKind::Stone,
+                        700,
+                        700,
+                        0,
+                        "Каменоломня",
+                    )),
+                    TerrainKind::Mountain => Some((
+                        ResourceKind::Iron,
+                        450,
+                        450,
+                        0,
+                        "Рудное месторождение",
+                    )),
+                    TerrainKind::Plains if cell.soil_fertility >= 75 => Some((
+                        ResourceKind::WildFood,
+                        120 + u64::from(cell.soil_fertility),
+                        300,
+                        8,
+                        "Дикие пищевые ресурсы",
+                    )),
+                    TerrainKind::Plains => None,
+                };
+                if let Some((kind, stock, capacity, regeneration, name)) = site {
+                    let label = format!("{name} ({},{})", cell.position.x, cell.position.y);
+                    world.register_resource_site(
+                        label,
+                        kind,
+                        cell.position,
+                        stock.min(capacity),
+                        capacity,
+                        regeneration,
+                    )?;
+                }
+            }
+        }
+
+        let affected_entities = world.entities.keys().copied().collect();
         world.event_log.push(EventEnvelope {
             event_id: 0,
             world_id: world.id,
@@ -201,15 +271,19 @@ impl WorldState {
             sequence: 0,
             actor: "world_factory".into(),
             cause: "starter_scenario_created".into(),
-            affected_entities: vec![river, hill],
+            affected_entities,
             ruleset_version: world.ruleset_version,
             provenance: Provenance::ModelAssumption {
-                assumption_id: "starter-settlements-v1".into(),
+                assumption_id: if ruleset_version >= 2 {
+                    "starter-settlements-and-resource-sites-v2".into()
+                } else {
+                    "starter-settlements-v1".into()
+                },
             },
             payload: EventPayload::WorldCreated,
         });
         world.next_event_sequence = 1;
-        world
+        Some(world)
     }
 
     fn settlement_attributes(&mut self, id: EntityId, setup: SettlementSetup) {
@@ -249,6 +323,37 @@ impl WorldState {
         };
         entity.location = Some(position);
         true
+    }
+
+    pub fn register_resource_site(
+        &mut self,
+        name: String,
+        kind: ResourceKind,
+        location: GridPoint,
+        stock_units: u64,
+        capacity_units: u64,
+        regeneration_units_per_tick: u64,
+    ) -> Option<EntityId> {
+        if self.geography.cell_at(location).is_none() || stock_units > capacity_units {
+            return None;
+        }
+        let id = self.register_entity(EntityKind::ResourceSite, name)?;
+        if !self.set_entity_location(id, location) {
+            self.entities.remove(&id);
+            return None;
+        }
+        self.resource_sites.insert(
+            id,
+            ResourceSite {
+                id,
+                kind,
+                location,
+                stock_units,
+                capacity_units,
+                regeneration_units_per_tick,
+            },
+        );
+        Some(id)
     }
 
     pub fn register_entity(&mut self, kind: EntityKind, name: String) -> Option<EntityId> {
