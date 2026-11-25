@@ -445,18 +445,22 @@ mod tests {
     }
 
     #[test]
-    fn world_snapshot_round_trip_preserves_geography_and_event_history() {
+    fn world_snapshot_round_trip_preserves_domain_state_and_excludes_event_history() {
         let engine = SimulationEngine::civilization();
         let mut world = WorldState::starter(314);
         engine.advance_tick(&mut world).expect("tick");
         let encoded = serde_json::to_string(&world).expect("serialize world");
-        let decoded: WorldState = serde_json::from_str(&encoded).expect("deserialize world");
-        assert_eq!(decoded, world);
+        let mut decoded: WorldState =
+            serde_json::from_str(&encoded).expect("deserialize world");
+        assert!(!world.event_log.is_empty());
+        assert!(decoded.event_log.is_empty());
+        assert_eq!(decoded.next_event_sequence, world.next_event_sequence);
+        let mut expected_snapshot = world.clone();
+        expected_snapshot.event_log.clear();
+        assert_eq!(decoded, expected_snapshot);
         assert!(decoded.geography.validate().is_ok());
-        assert_eq!(
-            decoded.event_log.len(),
-            decoded.next_event_sequence as usize
-        );
+        decoded.event_log = world.event_log.clone();
+        assert_eq!(decoded, world);
     }
 
     #[test]
