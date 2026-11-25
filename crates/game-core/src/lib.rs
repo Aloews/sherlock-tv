@@ -10,5 +10,5 @@ pub use simulation::{
 };
 pub use world::{
     EntityId, EntityKind, EntityRecord, EventEnvelope, EventPayload, Provenance, ResourceKind,
-    ResourceSite, ResourceSiteError, ResourceUnit, Tick, WorldId, WorldState,
+    ResourceSite, ResourceSiteError, ResourceUnit, Tick, WorldId, WorldState, CURRENT_RULESET_VERSION,
 };
