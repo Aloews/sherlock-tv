@@ -26,4 +26,4 @@ Agents working in this repository operate as a coordinated engineering team.
 - A feature that uses fabricated values without marking them as simulation assumptions.
 
 ## Definition of ready
-A playable milestone must create a world, inspect its state, execute a real tick, show resulting state in the browser, preserve event causality, and pass all required quality gates. In-memory state must be explicitly described as ephemeral until persistence exists.
+A playable milestone must create a world, inspect its state, execute a real tick, show resulting state in the browser, preserve event causality, and pass all required quality gates. PostgreSQL snapshots and the separate append-only event stream are authoritative; read consistency and transactional tick writes must be tested. Any remaining in-memory-only state must be explicitly identified.
