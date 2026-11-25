@@ -252,21 +252,29 @@ async fn load_events(
 }
 
 async fn load_world(pool: &PgPool, world_id: i64) -> Result<WorldState, StatusCode> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let snapshot = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT current_snapshot FROM worlds WHERE id = $1",
     )
     .bind(world_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
     let mut world: WorldState =
         serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut connection = pool
-        .acquire()
+    world.event_log = load_events(&mut transaction, world_id).await?;
+    transaction
+        .commit()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    world.event_log = load_events(&mut connection, world_id).await?;
     Ok(world)
 }
 
