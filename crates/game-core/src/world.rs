@@ -180,8 +180,8 @@ impl WorldState {
                 timber_regeneration: 18,
             },
         );
-        world.set_entity_location(river, GridPoint { x: 2, y: 2 });
-        world.set_entity_location(hill, GridPoint { x: 5, y: 4 });
+        assert!(world.set_entity_location(river, GridPoint { x: 2, y: 2 }));
+        assert!(world.set_entity_location(hill, GridPoint { x: 5, y: 4 }));
         world.settlement_attributes(
             hill,
             SettlementSetup {
