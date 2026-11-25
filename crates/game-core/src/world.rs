@@ -14,7 +14,13 @@ fn choose_resource_position(
         .cells
         .iter()
         .find(|cell| preferred.contains(&cell.terrain) && !used.contains(&cell.position))
-        .or_else(|| world.geography.cells.iter().find(|cell| !used.contains(&cell.position)))
+        .or_else(|| {
+            world
+                .geography
+                .cells
+                .iter()
+                .find(|cell| !used.contains(&cell.position))
+        })
         .map(|cell| cell.position)
         .unwrap_or(GridPoint { x: 0, y: 0 })
 }
@@ -274,12 +280,18 @@ impl WorldState {
         );
 
         let mut used_positions = vec![GridPoint { x: 2, y: 2 }, GridPoint { x: 5, y: 4 }];
-        let forest_position =
-            choose_resource_position(&world, &[crate::geography::TerrainKind::Forest], &used_positions);
+        let forest_position = choose_resource_position(
+            &world,
+            &[crate::geography::TerrainKind::Forest],
+            &used_positions,
+        );
         used_positions.push(forest_position);
         let stone_position = choose_resource_position(
             &world,
-            &[crate::geography::TerrainKind::Mountain, crate::geography::TerrainKind::Hills],
+            &[
+                crate::geography::TerrainKind::Mountain,
+                crate::geography::TerrainKind::Hills,
+            ],
             &used_positions,
         );
         used_positions.push(stone_position);
@@ -436,7 +448,10 @@ impl WorldState {
                 return Err(format!("entity {} is outside world geography", id.0));
             }
             if entity.kind == EntityKind::ResourceSite && !self.resource_sites.contains_key(id) {
-                return Err(format!("resource-site entity {} has no typed resource state", id.0));
+                return Err(format!(
+                    "resource-site entity {} has no typed resource state",
+                    id.0
+                ));
             }
         }
         if self
@@ -449,14 +464,20 @@ impl WorldState {
         }
         for (id, site) in &self.resource_sites {
             if *id != site.id {
-                return Err(format!("resource-site key does not match site id: {}", id.0));
+                return Err(format!(
+                    "resource-site key does not match site id: {}",
+                    id.0
+                ));
             }
             let entity = self
                 .entities
                 .get(id)
                 .ok_or_else(|| format!("resource site {} has no entity record", id.0))?;
             if entity.kind != EntityKind::ResourceSite || entity.location != Some(site.location) {
-                return Err(format!("resource site {} has inconsistent entity metadata", id.0));
+                return Err(format!(
+                    "resource site {} has inconsistent entity metadata",
+                    id.0
+                ));
             }
             if self.geography.cell_at(site.location).is_none() {
                 return Err(format!("resource site {} is outside world geography", id.0));
