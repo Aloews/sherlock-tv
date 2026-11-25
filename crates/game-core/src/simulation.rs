@@ -450,8 +450,7 @@ mod tests {
         let mut world = WorldState::starter(314);
         engine.advance_tick(&mut world).expect("tick");
         let encoded = serde_json::to_string(&world).expect("serialize world");
-        let mut decoded: WorldState =
-            serde_json::from_str(&encoded).expect("deserialize world");
+        let mut decoded: WorldState = serde_json::from_str(&encoded).expect("deserialize world");
         assert!(!world.event_log.is_empty());
         assert!(decoded.event_log.is_empty());
         assert_eq!(decoded.next_event_sequence, world.next_event_sequence);
