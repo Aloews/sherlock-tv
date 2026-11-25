@@ -65,6 +65,7 @@ fn WorldDashboard() -> impl IntoView {
     let (status, set_status) = signal("Подключите API и создайте новый мир.".to_string());
     let (api_base, set_api_base) = signal(DEFAULT_API_BASE.trim_end_matches('/').to_string());
     let (world_id, set_world_id) = signal(String::new());
+    let (replay_result, set_replay_result) = signal(None::<ReplayView>);
 
     let create_world = move |_| {
         let base = api_base.get_untracked();
@@ -91,6 +92,7 @@ fn WorldDashboard() -> impl IntoView {
                 Ok(view) => {
                     set_status.set(format!("Мир сохранён. ID: {}.", view.world_id));
                     set_world_id.set(view.world_id.to_string());
+                    set_replay_result.set(None);
                     set_world.set(Some(view));
                 }
                 Err(error) => set_status.set(format!("Не удалось создать мир: {error}")),
@@ -125,6 +127,7 @@ fn WorldDashboard() -> impl IntoView {
                 Ok(view) => {
                     set_status.set(format!("Мир {} загружен из сохранения.", view.world_id));
                     set_world_id.set(view.world_id.to_string());
+                    set_replay_result.set(None);
                     set_world.set(Some(view));
                 }
                 Err(error) => set_status.set(format!("Не удалось загрузить мир: {error}")),
@@ -161,9 +164,48 @@ fn WorldDashboard() -> impl IntoView {
                         "Ход {} завершён. Записано событий: {}.",
                         response.world.tick, response.emitted_events
                     ));
+                    set_replay_result.set(None);
                     set_world.set(Some(response.world));
                 }
                 Err(error) => set_status.set(format!("Не удалось выполнить ход: {error}")),
+            }
+        });
+    };
+
+    let verify_replay = move |_| {
+        let base = api_base.get_untracked();
+        let Some(id) = world.get_untracked().map(|current| current.world_id) else {
+            set_status.set("Сначала создайте или загрузите мир.".into());
+            return;
+        };
+        set_status.set("Проверяем историю симуляции…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response = gloo_net::http::Request::get(&format!(
+                    "{base}/api/v1/world/{id}/replay"
+                ))
+                .send()
+                .await
+                .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<ReplayView>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(replay) => {
+                    set_status.set(if replay.verified {
+                        format!("История мира {} подтверждена повторным расчётом.", replay.world_id)
+                    } else {
+                        "Обнаружено расхождение между снимком и историей событий.".into()
+                    });
+                    set_replay_result.set(Some(replay));
+                }
+                Err(error) => set_status.set(format!("Не удалось проверить историю: {error}")),
             }
         });
     };
@@ -185,9 +227,24 @@ fn WorldDashboard() -> impl IntoView {
                     <button class="primary-button" on:click=create_world>"Создать мир"</button>
                     <button class="secondary-button" on:click=load_world>"Загрузить мир"</button>
                     <button class="secondary-button" on:click=advance_tick disabled=move || world.get().is_none()>"Следующий ход"</button>
+                    <button class="secondary-button" on:click=verify_replay disabled=move || world.get().is_none()>"Проверить историю"</button>
                 </div>
                 <p class="status-message" aria-live="polite">{move || status.get()}</p>
             </section>
+
+            <Show when=move || replay_result.get().is_some()>
+                {move || replay_result.get().map(|replay| view! {
+                    <section class="replay-result">
+                        <p class="eyebrow">"ПРОВЕРКА ВОСПРОИЗВЕДЕНИЯ"</p>
+                        <h3>{if replay.verified { "История подтверждена" } else { "Обнаружено расхождение" }}</h3>
+                        <p>{format!("Мир #{} · ходов воспроизведено: {} · событий: {}", replay.world_id, replay.replayed_ticks, replay.event_count)}</p>
+                        <div class="replay-checks">
+                            <span>{if replay.snapshot_matches { "✓ Состояние совпадает" } else { "✕ Состояние отличается" }}</span>
+                            <span>{if replay.event_log_matches { "✓ История событий совпадает" } else { "✕ История событий отличается" }}</span>
+                        </div>
+                    </section>
+                })}
+            </Show>
 
             <Show when=move || world.get().is_some()>
                 {move || world.get().map(|current| view! {
@@ -285,6 +342,17 @@ fn WorldDashboard() -> impl IntoView {
             </div>
         </section>
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ReplayView {
+    world_id: u64,
+    tick: u64,
+    replayed_ticks: u64,
+    event_count: usize,
+    snapshot_matches: bool,
+    event_log_matches: bool,
+    verified: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
