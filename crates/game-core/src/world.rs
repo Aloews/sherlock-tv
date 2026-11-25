@@ -262,7 +262,7 @@ impl WorldState {
                 food_production: 250,
                 food_per_person: 2,
                 timber_stock: 500,
-                timber_regeneration: 18,
+                timber_regeneration: 0,
             },
         );
         assert!(world.set_entity_location(river, GridPoint { x: 2, y: 2 }));
@@ -275,7 +275,7 @@ impl WorldState {
                 food_production: 170,
                 food_per_person: 2,
                 timber_stock: 220,
-                timber_regeneration: 12,
+                timber_regeneration: 0,
             },
         );
 
@@ -358,7 +358,7 @@ impl WorldState {
             affected_entities: vec![river, hill, forest, quarry, ore, water],
             ruleset_version: world.ruleset_version,
             provenance: Provenance::ModelAssumption {
-                assumption_id: "starter-settlements-v1".into(),
+                assumption_id: "starter-world-v2".into(),
             },
             payload: EventPayload::WorldCreated,
         });
