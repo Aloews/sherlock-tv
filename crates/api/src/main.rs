@@ -5,9 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, WorldState,
-};
+use sherlock_game_core::{EntityKind, EventEnvelope, EventPayload, SimulationEngine, WorldState};
 use std::{env, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -90,9 +88,7 @@ fn event_type(event: &EventEnvelope) -> String {
         EventPayload::PowerChanged { .. } => "power_changed".into(),
         EventPayload::CultureChanged { .. } => "culture_changed".into(),
         EventPayload::Custom {
-            domain,
-            event_type,
-            ..
+            domain, event_type, ..
         } => format!("{domain}.{event_type}"),
     }
 }
@@ -190,8 +186,7 @@ fn app(state: AppState) -> Router {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            env::var("RUST_LOG")
-                .unwrap_or_else(|_| "sherlock_api=info,tower_http=info".into()),
+            env::var("RUST_LOG").unwrap_or_else(|_| "sherlock_api=info,tower_http=info".into()),
         )
         .init();
 
@@ -262,13 +257,14 @@ mod tests {
         assert!(response.emitted_events >= 5);
         assert_eq!(response.world.settlements[0].food, 910);
         assert_eq!(response.world.settlements[0].timber, 518);
-        assert_eq!(
-            response.world.event_count,
-            1 + response.emitted_events
+        assert_eq!(response.world.event_count, 1 + response.emitted_events);
+        assert!(
+            response
+                .world
+                .recent_events
+                .iter()
+                .any(|event| { event.tick == 1 && event.event_type == "tick_advanced" })
         );
-        assert!(response.world.recent_events.iter().any(|event| {
-            event.tick == 1 && event.event_type == "tick_advanced"
-        }));
         assert_eq!(
             get_world(State(state)).await.expect("world").0.event_count,
             response.world.event_count

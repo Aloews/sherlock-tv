@@ -207,17 +207,29 @@ impl WorldState {
 
     fn settlement_attributes(&mut self, id: EntityId, setup: SettlementSetup) {
         if let Some(entity) = self.entities.get_mut(&id) {
-            entity.attributes.insert("population".into(), setup.population.into());
-            entity.attributes.insert("food".into(), setup.food_stock.into());
-            entity.attributes.insert("food_production".into(), setup.food_production.into());
-            entity.attributes.insert("food_per_person".into(), setup.food_per_person.into());
-            entity.attributes.insert("timber".into(), setup.timber_stock.into());
+            entity
+                .attributes
+                .insert("population".into(), setup.population.into());
+            entity
+                .attributes
+                .insert("food".into(), setup.food_stock.into());
+            entity
+                .attributes
+                .insert("food_production".into(), setup.food_production.into());
+            entity
+                .attributes
+                .insert("food_per_person".into(), setup.food_per_person.into());
+            entity
+                .attributes
+                .insert("timber".into(), setup.timber_stock.into());
             entity.attributes.insert(
                 "timber_regeneration".into(),
                 setup.timber_regeneration.into(),
             );
             entity.attributes.insert("treasury".into(), 1000_u64.into());
-            entity.attributes.insert("tax_rate_basis_points".into(), 500_u64.into());
+            entity
+                .attributes
+                .insert("tax_rate_basis_points".into(), 500_u64.into());
         }
     }
 
