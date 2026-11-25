@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "iterations": 1,
+  "iterations": 2,
   "completed_ids": [],
-  "active_task": "PLAYABLE-001",
+  "active_task": "QA-READY-001",
   "repair_attempts": 0,
   "paused": false
 }
