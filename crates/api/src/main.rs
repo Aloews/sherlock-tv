@@ -1,6 +1,6 @@
-use axum::{Json, Router, extract::State, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::{get, post}};
 use serde::Serialize;
-use sherlock_game_core::WorldState;
+use sherlock_game_core::{SimulationEngine, WorldState};
 use std::{env, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::trace::TraceLayer;
@@ -19,9 +19,17 @@ struct HealthResponse {
 #[derive(Serialize)]
 struct WorldSummary {
     world_id: u64,
+    seed: u64,
     tick: u64,
     ruleset_version: u32,
     entity_count: usize,
+}
+
+#[derive(Serialize)]
+struct TickResponse {
+    world_id: u64,
+    tick: u64,
+    emitted_events: usize,
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -35,16 +43,29 @@ async fn world_summary(State(state): State<AppState>) -> Json<WorldSummary> {
     let world = state.world.read().await;
     Json(WorldSummary {
         world_id: world.id.0,
+        seed: world.seed,
         tick: world.tick.0,
         ruleset_version: world.ruleset_version,
         entity_count: world.entities.len(),
     })
 }
 
+async fn advance_tick(State(state): State<AppState>) -> Result<Json<TickResponse>, StatusCode> {
+    let mut world = state.world.write().await;
+    let engine = SimulationEngine::new(Vec::new());
+    let events = engine.advance_tick(&mut world).map_err(|_| StatusCode::CONFLICT)?;
+    Ok(Json(TickResponse {
+        world_id: world.id.0,
+        tick: world.tick.0,
+        emitted_events: events.len(),
+    }))
+}
+
 fn app(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/api/v1/world", get(world_summary))
+        .route("/api/v1/world/tick", post(advance_tick))
         .with_state(state)
         .layer(TraceLayer::new_for_http())
 }
@@ -89,8 +110,30 @@ mod tests {
         let response = world_summary(State(state)).await.0;
 
         assert_eq!(response.world_id, 77);
+        assert_eq!(response.seed, 77);
         assert_eq!(response.tick, 0);
         assert_eq!(response.ruleset_version, 3);
         assert_eq!(response.entity_count, 0);
+    }
+
+    #[tokio::test]
+    async fn step_command_advances_world_once() {
+        let state = AppState {
+            world: Arc::new(RwLock::new(WorldState::new(42, 1))),
+        };
+        let response = advance_tick(State(state.clone())).await.expect("step").0;
+        assert_eq!(response.world_id, 42);
+        assert_eq!(response.tick, 1);
+        assert_eq!(response.emitted_events, 1);
+        assert_eq!(world_summary(State(state)).await.0.tick, 1);
+    }
+
+    #[tokio::test]
+    async fn tick_overflow_returns_conflict_without_mutating_state() {
+        let state = AppState {
+            world: Arc::new(RwLock::new(WorldState::new(42, 1))),
+        };
+        state.world.write().await.tick = sherlock_game_core::Tick(u64::MAX);
+        assert_eq!(advance_tick(State(state)).await.unwrap_err(), StatusCode::CONFLICT);
     }
 }
