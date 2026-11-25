@@ -1,3 +1,9 @@
+use crate::geography::{GridPoint, WorldMap};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+pub const CURRENT_RULESET_VERSION: u32 = 2;
+
 fn choose_resource_position(
     world: &WorldState,
     preferred: &[crate::geography::TerrainKind],
@@ -12,12 +18,6 @@ fn choose_resource_position(
         .map(|cell| cell.position)
         .unwrap_or(GridPoint { x: 0, y: 0 })
 }
-
-use crate::geography::{GridPoint, WorldMap};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-
-pub const CURRENT_RULESET_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -273,7 +273,7 @@ impl WorldState {
             },
         );
 
-        let mut used_positions = Vec::new();
+        let mut used_positions = vec![GridPoint { x: 2, y: 2 }, GridPoint { x: 5, y: 4 }];
         let forest_position =
             choose_resource_position(&world, &[crate::geography::TerrainKind::Forest], &used_positions);
         used_positions.push(forest_position);
