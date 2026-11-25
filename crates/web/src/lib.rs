@@ -159,7 +159,7 @@ fn WorldDashboard() -> impl IntoView {
                                 <div><p class="eyebrow">"ГЕОГРАФИЯ"</p><h3>"Рельеф и природные условия"</h3></div>
                                 <span>{format!("{} × {}", current.map.width, current.map.height)}</span>
                             </div>
-                            <div class="world-map" style:grid-template-columns=move || format!("repeat({}, minmax(0, 1fr))", current.map.width)>
+                            <div class="world-map">
                                 {current.map.cells.into_iter().map(|cell| {
                                     let class_name = format!("map-cell terrain-{}", cell.terrain);
                                     let title = format!(
