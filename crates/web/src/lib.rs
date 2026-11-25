@@ -15,7 +15,26 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    map: MapView,
     recent_events: Vec<EventView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct MapView {
+    width: u16,
+    height: u16,
+    cells: Vec<MapCellView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct MapCellView {
+    x: u16,
+    y: u16,
+    terrain: String,
+    climate: String,
+    elevation_meters: u16,
+    soil_fertility: u8,
+    water_access: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -135,6 +154,40 @@ fn WorldDashboard() -> impl IntoView {
                             <div><span>"СОБЫТИЯ"</span><strong>{current.event_count}</strong></div>
                             <div><span>"SEED / RULESET"</span><strong>{format!("{} / {}", current.seed, current.ruleset_version)}</strong></div>
                         </div>
+                        <section class="map-panel">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ГЕОГРАФИЯ"</p><h3>"Рельеф и природные условия"</h3></div>
+                                <span>{format!("{} × {}", current.map.width, current.map.height)}</span>
+                            </div>
+                            <div class="world-map" style:grid-template-columns=move || format!("repeat({}, minmax(0, 1fr))", current.map.width)>
+                                {current.map.cells.into_iter().map(|cell| {
+                                    let class_name = format!("map-cell terrain-{}", cell.terrain);
+                                    let title = format!(
+                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {}",
+                                        cell.x,
+                                        cell.y,
+                                        cell.climate,
+                                        cell.elevation_meters,
+                                        cell.soil_fertility,
+                                        if cell.water_access { "есть" } else { "нет" }
+                                    );
+                                    view! {
+                                        <div class=class_name title=title>
+                                            <span>{match cell.terrain.as_str() {
+                                                "river" => "Р",
+                                                "forest" => "Л",
+                                                "hills" => "Х",
+                                                "mountain" => "Г",
+                                                _ => "П",
+                                            }}</span>
+                                        </div>
+                                    }
+                                }).collect_view()}
+                            </div>
+                            <div class="map-legend">
+                                <span>"П — равнины"</span><span>"Л — лес"</span><span>"Х — холмы"</span><span>"Г — горы"</span><span>"Р — река"</span>
+                            </div>
+                        </section>
                         <div class="settlement-grid">
                             {current.settlements.into_iter().map(|settlement| view! {
                                 <article class="settlement-card">
