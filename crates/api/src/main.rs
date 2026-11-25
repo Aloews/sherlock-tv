@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use sherlock_game_core::{EntityKind, EventEnvelope, EventPayload, SimulationEngine, WorldState};
+use sherlock_game_core::{EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldState};
 use std::{env, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
