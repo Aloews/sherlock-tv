@@ -2,7 +2,7 @@ use crate::geography::{GridPoint, WorldMap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const CURRENT_RULESET_VERSION: u32 = 2;
+pub const CURRENT_RULESET_VERSION: u32 = 3;
 
 fn choose_resource_position(
     world: &WorldState,
@@ -96,6 +96,12 @@ pub enum EventPayload {
         site_id: EntityId,
         resource: String,
         delta: i64,
+    },
+    ResourceShortage {
+        entity_id: EntityId,
+        resource: String,
+        quantity: u64,
+        unit: String,
     },
     ProductionCompleted {
         organization_id: EntityId,
@@ -358,7 +364,7 @@ impl WorldState {
             affected_entities: vec![river, hill, forest, quarry, ore, water],
             ruleset_version: world.ruleset_version,
             provenance: Provenance::ModelAssumption {
-                assumption_id: "starter-world-v2".into(),
+                assumption_id: "starter-world-v3".into(),
             },
             payload: EventPayload::WorldCreated,
         });
