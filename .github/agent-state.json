@@ -1,8 +1,15 @@
 {
   "version": 1,
-  "iterations": 2,
-  "completed_ids": [],
-  "active_task": "QA-READY-001",
+  "iterations": 3,
+  "completed_ids": [
+    "PLAYABLE-001",
+    "QA-READY-001",
+    "WORLD-001",
+    "REPLAY-001"
+  ],
+  "active_task": "ECOLOGY-001",
   "repair_attempts": 0,
-  "paused": false
+  "paused": false,
+  "last_verified_sha": "f7d0a64e4abf79efb0a7a2b8db87deca1e576615",
+  "last_ci_run": "45642273968"
 }
