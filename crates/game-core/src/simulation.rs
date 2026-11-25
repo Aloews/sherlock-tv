@@ -1,3 +1,4 @@
+use crate::ecology::EcologySystem;
 use crate::world::{
     EntityId, EntityKind, EventEnvelope, EventPayload, Provenance, Tick, WorldState,
 };
@@ -62,7 +63,7 @@ impl SimulationEngine {
     }
 
     pub fn civilization() -> Self {
-        Self::new(vec![Box::new(CivilizationSystem)])
+        Self::new(vec![Box::new(CivilizationSystem), Box::new(EcologySystem)])
     }
 
     pub fn advance_tick(
