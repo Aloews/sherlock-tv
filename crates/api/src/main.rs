@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
     EntityKind, EventEnvelope, EventPayload, ResourceUnit, SimulationEngine,
-    TerrainKind, WorldId, WorldState,
+    TerrainKind, WorldId, WorldState, CURRENT_RULESET_VERSION,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, net::SocketAddr};
@@ -471,7 +471,7 @@ async fn verify_replay(
 ) -> Result<Json<ReplayView>, StatusCode> {
     const MAX_REPLAY_TICKS: u64 = 100_000;
     let world = load_world(&state.pool, database_id(world_id)?).await?;
-    if world.tick.0 > MAX_REPLAY_TICKS {
+    if world.tick.0 > MAX_REPLAY_TICKS || world.ruleset_version != CURRENT_RULESET_VERSION {
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
@@ -667,6 +667,37 @@ mod tests {
         assert!(replay.snapshot_matches);
         assert!(replay.event_log_matches);
         assert!(replay.verified);
+    }
+
+    #[tokio::test]
+    async fn replay_rejects_unsupported_legacy_ruleset() {
+        let state = test_state().await;
+        let created = create_world(
+            State(state.clone()),
+            Json(CreateWorldRequest { seed: Some(2027) }),
+        )
+        .await
+        .expect("world creation")
+        .0;
+        let database_id = database_id(created.world_id).expect("database id");
+        let mut world = load_world(&state.pool, database_id)
+            .await
+            .expect("load world");
+        world.ruleset_version = 1;
+        let snapshot = serde_json::to_value(&world).expect("serialize legacy fixture");
+        sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
+            .bind(database_id)
+            .bind(snapshot)
+            .execute(&state.pool)
+            .await
+            .expect("store legacy fixture");
+
+        assert_eq!(
+            verify_replay(Path(created.world_id), State(state))
+                .await
+                .unwrap_err(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
     }
 
     #[tokio::test]
