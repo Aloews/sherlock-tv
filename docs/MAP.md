@@ -22,13 +22,13 @@
 - [ ] States, institutions, laws, taxation, public goods and legitimacy beyond the starter tax calculation.
 - [ ] Families, ownership, inheritance, succession and dynastic networks.
 - [ ] Culture, information, beliefs and historical memory.
-- [~] PostgreSQL world records, per-tick JSONB snapshots and append-only event rows; deterministic replay from genesis and retention/compaction policy remain.
-- [~] Rust API commands for create, inspect and step; pause and fast-forward remain.
+- [~] PostgreSQL world records, per-tick JSONB snapshots and append-only event rows; deterministic replay verification from genesis is implemented, while replay checkpoints and retention/compaction policy remain.
+- [~] Rust API commands for create, inspect, step and deterministic replay verification; pause and fast-forward remain.
 - [~] Leptos interface for create/step and settlement inspection; event history, persisted sessions and production API configuration remain.
 
 ## Current implementation boundary
 
-The current playable-slice branch contains a PostgreSQL-backed starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events and recent event history, create/inspect/step HTTP routes and a Leptos client that invokes those routes. World state and event history are stored in PostgreSQL and survive API restarts; API tests use a real PostgreSQL service. No deterministic replay endpoint, multi-user authorization/isolation, production deployment or production hardening is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
+The current playable-slice branch contains a PostgreSQL-backed starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events and recent event history, create/inspect/step/replay-verification HTTP routes and a Leptos client that invokes create/inspect/step. World state and event history are stored in PostgreSQL and survive API restarts. Replay verification rebuilds the world from its seed, replays committed ticks, and compares both the reconstructed domain snapshot and append-only event log. API tests use a real PostgreSQL service. Multi-user authorization/isolation, replay checkpoints, pause/fast-forward, production deployment and production hardening remain unimplemented. Treat this as an interactive prototype, not a complete or production-ready game.
 
 ## Acceptance gates
 
