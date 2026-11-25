@@ -6,7 +6,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldId, WorldState,
+    EntityKind, EventEnvelope, EventPayload, ResourceKind, ResourceUnit, SimulationEngine,
+    TerrainKind, WorldId, WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, net::SocketAddr};
@@ -51,6 +52,20 @@ struct MapCellView {
     soil_fertility: u8,
     water_access: bool,
     settlements: Vec<String>,
+    resource_sites: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResourceSiteView {
+    id: u64,
+    name: String,
+    kind: &'static str,
+    x: u16,
+    y: u16,
+    stock: u64,
+    unit: &'static str,
+    capacity: u64,
+    regeneration_per_tick: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -78,6 +93,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    resource_sites: Vec<ResourceSiteView>,
     map: MapView,
     recent_events: Vec<EventView>,
 }
@@ -198,9 +214,34 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
                     })
                     .map(|entity| entity.name.clone())
                     .collect(),
+                resource_sites: world
+                    .resource_sites
+                    .values()
+                    .filter(|site| site.location == cell.position)
+                    .map(|site| site.name.clone())
+                    .collect(),
             })
             .collect(),
     };
+
+    let resource_sites = world
+        .resource_sites
+        .values()
+        .map(|site| ResourceSiteView {
+            id: site.id.0,
+            name: site.name.clone(),
+            kind: site.kind.as_str(),
+            x: site.location.x,
+            y: site.location.y,
+            stock: site.stock,
+            unit: match site.kind.unit() {
+                ResourceUnit::CubicMeters => "м³",
+                ResourceUnit::Tonnes => "т",
+            },
+            capacity: site.capacity,
+            regeneration_per_tick: site.regeneration_per_tick,
+        })
+        .collect();
 
     let recent_events = world
         .event_log
@@ -224,6 +265,7 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
         entity_count: world.entities.len(),
         event_count: world.event_log.len(),
         settlements,
+        resource_sites,
         map,
         recent_events,
     })
