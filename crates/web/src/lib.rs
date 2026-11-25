@@ -42,10 +42,18 @@ fn WorldDashboard() -> impl IntoView {
                     .header("Content-Type", "application/json")
                     .body(r#"{"seed":42}"#)
                     .map_err(|error| error.to_string())?
-                    .send().await.map_err(|error| error.to_string())?;
-                if !response.ok() { return Err(format!("API вернул HTTP {}", response.status())); }
-                response.json::<WorldView>().await.map_err(|error| error.to_string())
-            }.await;
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<WorldView>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
             match result {
                 Ok(view) => {
                     set_status.set("Мир создан. Симуляция готова к первому ходу.".into());
@@ -62,13 +70,24 @@ fn WorldDashboard() -> impl IntoView {
         leptos::task::spawn_local(async move {
             let result = async {
                 let response = gloo_net::http::Request::post(&format!("{base}/api/v1/world/tick"))
-                    .send().await.map_err(|error| error.to_string())?;
-                if !response.ok() { return Err(format!("API вернул HTTP {}", response.status())); }
-                response.json::<TickResponse>().await.map_err(|error| error.to_string())
-            }.await;
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response
+                    .json::<TickResponse>()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+            .await;
             match result {
                 Ok(response) => {
-                    set_status.set(format!("Ход {} завершён. Записано событий: {}.", response.world.tick, response.emitted_events));
+                    set_status.set(format!(
+                        "Ход {} завершён. Записано событий: {}.",
+                        response.world.tick, response.emitted_events
+                    ));
                     set_world.set(Some(response.world));
                 }
                 Err(error) => set_status.set(format!("Не удалось выполнить ход: {error}")),
