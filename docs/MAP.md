@@ -22,13 +22,13 @@
 - [ ] States, institutions, laws, taxation, public goods and legitimacy beyond the starter tax calculation.
 - [ ] Families, ownership, inheritance, succession and dynastic networks.
 - [ ] Culture, information, beliefs and historical memory.
-- [ ] PostgreSQL snapshots, append-only event persistence and replay from genesis.
+- [~] PostgreSQL world records, per-tick JSONB snapshots and append-only event rows; deterministic replay from genesis and retention/compaction policy remain.
 - [~] Rust API commands for create, inspect and step; pause and fast-forward remain.
 - [~] Leptos interface for create/step and settlement inspection; event history, persisted sessions and production API configuration remain.
 
 ## Current implementation boundary
 
-The current playable-slice branch contains an in-memory starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events and recent event history, create/inspect/step HTTP routes and a Leptos client that invokes those routes. State is process-local and is lost on API restart. No map, save/load, PostgreSQL persistence, multi-user isolation or production deployment is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
+The current playable-slice branch contains a PostgreSQL-backed starter world with two settlements, deterministic tick execution, food/timber/population/treasury transitions, versioned causal tick events and recent event history, create/inspect/step HTTP routes and a Leptos client that invokes those routes. World state and event history are stored in PostgreSQL and survive API restarts; API tests use a real PostgreSQL service. No deterministic replay endpoint, multi-user authorization/isolation, production deployment or production hardening is implemented yet. Treat this as an interactive prototype, not a complete or production-ready game.
 
 ## Acceptance gates
 
