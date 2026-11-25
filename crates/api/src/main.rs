@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, ResourceKind, ResourceUnit, SimulationEngine,
+    EntityKind, EventEnvelope, EventPayload, ResourceUnit, SimulationEngine,
     TerrainKind, WorldId, WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -582,6 +582,9 @@ mod tests {
         assert_eq!(created.seed, 77);
         assert_eq!(created.tick, 0);
         assert_eq!(created.settlements.len(), 2);
+        assert_eq!(created.resource_sites.len(), 4);
+        assert!(created.resource_sites.iter().any(|site| site.kind == "forest_biomass"));
+        assert!(created.resource_sites.iter().any(|site| site.kind == "iron_ore"));
         assert_eq!((created.settlements[0].x, created.settlements[0].y), (2, 2));
         assert_eq!((created.settlements[1].x, created.settlements[1].y), (5, 4));
         assert_eq!(
