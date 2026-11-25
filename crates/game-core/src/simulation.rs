@@ -177,7 +177,11 @@ impl SimulationSystem for CivilizationSystem {
             let available = food
                 .checked_add(production)
                 .ok_or_else(|| SystemError::new("food stock overflow"))?;
-            let new_food = available.saturating_sub(consumption);
+            let (new_food, food_shortage) = if available >= consumption {
+                (available - consumption, 0)
+            } else {
+                (0, consumption - available)
+            };
             let new_food_delta_value = i64::try_from(new_food)
                 .map_err(|_| SystemError::new("food stock exceeds event delta range"))?;
             let previous_food_value = i64::try_from(food)
@@ -202,6 +206,20 @@ impl SimulationSystem for CivilizationSystem {
                         site_id: id,
                         resource: "food".into(),
                         delta: food_delta,
+                    },
+                });
+            }
+            if food_shortage > 0 {
+                drafts.push(EventDraft {
+                    actor: "economy".into(),
+                    cause: "unmet_food_consumption".into(),
+                    affected_entities: vec![id],
+                    provenance: Provenance::GeneratedSimulation,
+                    payload: EventPayload::ResourceShortage {
+                        entity_id: id,
+                        resource: "food".into(),
+                        quantity: food_shortage,
+                        unit: "food_units".into(),
                     },
                 });
             }
@@ -562,6 +580,33 @@ mod tests {
 
         assert!(engine.advance_tick(&mut world).is_err());
         assert_eq!(world, before);
+    }
+
+    #[test]
+    fn food_shortage_is_explicit_and_inventory_never_becomes_negative() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(47);
+        let settlement = world
+            .entities
+            .get_mut(&EntityId(1))
+            .expect("starter settlement");
+        settlement.attributes.insert("food".into(), 0_u64.into());
+        settlement
+            .attributes
+            .insert("food_production".into(), 0_u64.into());
+
+        let events = engine.advance_tick(&mut world).expect("shortage tick");
+        assert_eq!(world.entities[&EntityId(1)].attributes["food"], 0);
+        assert_eq!(world.entities[&EntityId(1)].attributes["population"], 119);
+        assert!(events.iter().any(|event| matches!(
+            &event.payload,
+            EventPayload::ResourceShortage {
+                entity_id: EntityId(1),
+                resource,
+                quantity: 240,
+                unit,
+            } if resource == "food" && unit == "food_units"
+        )));
     }
 
     #[test]
