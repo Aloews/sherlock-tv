@@ -37,6 +37,24 @@ struct SettlementView {
 }
 
 #[derive(Debug, Serialize)]
+struct MapCellView {
+    x: u16,
+    y: u16,
+    terrain: &'static str,
+    climate: &'static str,
+    elevation_meters: u16,
+    soil_fertility: u8,
+    water_access: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct MapView {
+    width: u16,
+    height: u16,
+    cells: Vec<MapCellView>,
+}
+
+#[derive(Debug, Serialize)]
 struct EventView {
     tick: u64,
     sequence: u64,
@@ -54,6 +72,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    map: MapView,
     recent_events: Vec<EventView>,
 }
 
@@ -93,6 +112,24 @@ fn event_type(event: &EventEnvelope) -> String {
     }
 }
 
+fn terrain_name(terrain: TerrainKind) -> &'static str {
+    match terrain {
+        TerrainKind::Plains => "plains",
+        TerrainKind::Forest => "forest",
+        TerrainKind::Hills => "hills",
+        TerrainKind::Mountain => "mountain",
+        TerrainKind::River => "river",
+    }
+}
+
+fn climate_name(climate: sherlock_game_core::ClimateBand) -> &'static str {
+    match climate {
+        sherlock_game_core::ClimateBand::Boreal => "boreal",
+        sherlock_game_core::ClimateBand::Temperate => "temperate",
+        sherlock_game_core::ClimateBand::Subtropical => "subtropical",
+    }
+}
+
 fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
     let settlements = world
         .entities
@@ -117,6 +154,25 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
         })
         .collect::<Result<Vec<_>, StatusCode>>()?;
 
+    let map = MapView {
+        width: world.geography.width,
+        height: world.geography.height,
+        cells: world
+            .geography
+            .cells
+            .iter()
+            .map(|cell| MapCellView {
+                x: cell.position.x,
+                y: cell.position.y,
+                terrain: terrain_name(cell.terrain),
+                climate: climate_name(cell.climate),
+                elevation_meters: cell.elevation_meters,
+                soil_fertility: cell.soil_fertility,
+                water_access: cell.water_access,
+            })
+            .collect(),
+    };
+
     let recent_events = world
         .event_log
         .iter()
@@ -139,6 +195,7 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
         entity_count: world.entities.len(),
         event_count: world.event_log.len(),
         settlements,
+        map,
         recent_events,
     })
 }
