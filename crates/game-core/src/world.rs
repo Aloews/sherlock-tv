@@ -1,4 +1,4 @@
-use crate::geography::WorldMap;
+use crate::geography::{GridPoint, WorldMap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -41,6 +41,7 @@ pub struct EntityRecord {
     pub kind: EntityKind,
     pub name: String,
     pub created_at: Tick,
+    pub location: Option<GridPoint>,
     pub attributes: BTreeMap<String, serde_json::Value>,
 }
 
@@ -179,6 +180,8 @@ impl WorldState {
                 timber_regeneration: 18,
             },
         );
+        world.set_entity_location(river, GridPoint { x: 2, y: 2 });
+        world.set_entity_location(hill, GridPoint { x: 5, y: 4 });
         world.settlement_attributes(
             hill,
             SettlementSetup {
@@ -236,6 +239,17 @@ impl WorldState {
         }
     }
 
+    pub fn set_entity_location(&mut self, id: EntityId, position: GridPoint) -> bool {
+        if self.geography.cell_at(position).is_none() {
+            return false;
+        }
+        let Some(entity) = self.entities.get_mut(&id) else {
+            return false;
+        };
+        entity.location = Some(position);
+        true
+    }
+
     pub fn register_entity(&mut self, kind: EntityKind, name: String) -> Option<EntityId> {
         let id = EntityId(self.next_entity_id);
         self.next_entity_id = self.next_entity_id.checked_add(1)?;
@@ -246,6 +260,7 @@ impl WorldState {
                 kind,
                 name,
                 created_at: self.tick,
+                location: None,
                 attributes: BTreeMap::new(),
             },
         );
