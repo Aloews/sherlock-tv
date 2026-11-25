@@ -84,3 +84,12 @@ footer { padding-top: 20px; border-top: 1px solid #ffffff20; }
 .replay-result h3 { margin: 8px 0; font-size: 20px; }
 .replay-result > p:not(.eyebrow) { color: #aebdca; font-size: 12px; }
 .replay-checks { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; color: #b7d4c7; font-size: 12px; }
+
+
+.resource-panel { margin: 28px 0 34px; }
+.resource-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.resource-card { min-width: 0; padding: 18px; border: 1px solid #ffffff18; border-radius: 12px; background: linear-gradient(145deg, #ffffff0c, #ffffff03); }
+.resource-card h3 { margin: 8px 0 14px; font-size: 17px; }
+.resource-card .settlement-stat { font-size: 12px; }
+.resource-location { margin: 12px 0 0; color: #91a1b3; font-size: 10px; }
+@media (max-width: 700px) { .resource-grid { grid-template-columns: 1fr; } }

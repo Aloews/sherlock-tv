@@ -44,6 +44,8 @@ pub enum SimulationError {
     TickOverflow,
     #[error("event sequence overflow")]
     EventSequenceOverflow,
+    #[error("world invariant failed: {message}")]
+    WorldInvariant { message: String },
     #[error("system {system_id} failed: {source}")]
     System {
         system_id: String,
@@ -62,7 +64,7 @@ impl SimulationEngine {
     }
 
     pub fn civilization() -> Self {
-        Self::new(vec![Box::new(CivilizationSystem)])
+        Self::new(vec![Box::new(CivilizationSystem), Box::new(EcologySystem)])
     }
 
     pub fn advance_tick(
@@ -90,6 +92,9 @@ impl SimulationEngine {
                 })?;
             drafts.extend(system_drafts);
         }
+        candidate
+            .validate()
+            .map_err(|message| SimulationError::WorldInvariant { message })?;
         drafts.push(EventDraft {
             actor: "simulation".into(),
             cause: "scheduled_tick".into(),
@@ -172,7 +177,11 @@ impl SimulationSystem for CivilizationSystem {
             let available = food
                 .checked_add(production)
                 .ok_or_else(|| SystemError::new("food stock overflow"))?;
-            let new_food = available.saturating_sub(consumption);
+            let (new_food, food_shortage) = if available >= consumption {
+                (available - consumption, 0)
+            } else {
+                (0, consumption - available)
+            };
             let new_food_delta_value = i64::try_from(new_food)
                 .map_err(|_| SystemError::new("food stock exceeds event delta range"))?;
             let previous_food_value = i64::try_from(food)
@@ -200,17 +209,33 @@ impl SimulationSystem for CivilizationSystem {
                     },
                 });
             }
-            drafts.push(EventDraft {
-                actor: "economy".into(),
-                cause: "renewable_resource_regrowth".into(),
-                affected_entities: vec![id],
-                provenance: Provenance::GeneratedSimulation,
-                payload: EventPayload::ResourceStockChanged {
-                    site_id: id,
-                    resource: "timber".into(),
-                    delta: timber_delta,
-                },
-            });
+            if food_shortage > 0 {
+                drafts.push(EventDraft {
+                    actor: "economy".into(),
+                    cause: "unmet_food_consumption".into(),
+                    affected_entities: vec![id],
+                    provenance: Provenance::GeneratedSimulation,
+                    payload: EventPayload::ResourceShortage {
+                        entity_id: id,
+                        resource: "food".into(),
+                        quantity: food_shortage,
+                        unit: "food_units".into(),
+                    },
+                });
+            }
+            if timber_delta != 0 {
+                drafts.push(EventDraft {
+                    actor: "economy".into(),
+                    cause: "renewable_resource_regrowth".into(),
+                    affected_entities: vec![id],
+                    provenance: Provenance::GeneratedSimulation,
+                    payload: EventPayload::ResourceStockChanged {
+                        site_id: id,
+                        resource: "timber".into(),
+                        delta: timber_delta,
+                    },
+                });
+            }
 
             let mut next_population = population;
             let mut population_delta = 0_i64;
@@ -269,6 +294,66 @@ impl SimulationSystem for CivilizationSystem {
                     domain: "finance".into(),
                     event_type: "tax_revenue".into(),
                     payload: serde_json::json!({"amount": tax_income, "treasury": new_treasury}),
+                },
+            });
+        }
+        Ok(drafts)
+    }
+}
+
+struct EcologySystem;
+
+impl SimulationSystem for EcologySystem {
+    fn id(&self) -> &'static str {
+        "ecology-resource-regeneration-v1"
+    }
+
+    fn advance(
+        &self,
+        world: &mut WorldState,
+        _tick: Tick,
+        _random: &mut dyn RngCore,
+    ) -> Result<Vec<EventDraft>, SystemError> {
+        let site_ids: Vec<EntityId> = world.resource_sites.keys().copied().collect();
+        let mut drafts = Vec::new();
+
+        for id in site_ids {
+            let site = world
+                .resource_sites
+                .get_mut(&id)
+                .ok_or_else(|| SystemError::new("resource site disappeared during tick"))?;
+            if site.stock > site.capacity {
+                return Err(SystemError::new("resource site stock exceeds capacity"));
+            }
+            if !site.kind.is_renewable() && site.regeneration_per_tick != 0 {
+                return Err(SystemError::new(
+                    "non-renewable resource site has a regeneration flow",
+                ));
+            }
+            let available_capacity = site
+                .capacity
+                .checked_sub(site.stock)
+                .ok_or_else(|| SystemError::new("resource-site capacity underflow"))?;
+            let regenerated = site.regeneration_per_tick.min(available_capacity);
+            if regenerated == 0 {
+                continue;
+            }
+            let new_stock = site
+                .stock
+                .checked_add(regenerated)
+                .ok_or_else(|| SystemError::new("resource-site stock overflow"))?;
+            let delta = i64::try_from(regenerated)
+                .map_err(|_| SystemError::new("resource regeneration exceeds event delta range"))?;
+            site.stock = new_stock;
+            drafts.push(EventDraft {
+                actor: "ecology".into(),
+                cause: "natural_resource_regeneration".into(),
+                affected_entities: vec![id],
+                provenance: Provenance::GeneratedSimulation,
+                payload: EventPayload::ResourceStockChanged {
+                    site_id: id,
+                    resource: site.kind.as_str().into(),
+                    delta,
                 },
             });
         }
@@ -356,7 +441,7 @@ mod tests {
     #[test]
     fn starter_world_contains_two_populated_settlements() {
         let world = WorldState::starter(42);
-        assert_eq!(world.entities.len(), 2);
+        assert_eq!(world.entities.len(), 6);
         assert_eq!(
             world
                 .entities
@@ -366,6 +451,7 @@ mod tests {
             2
         );
         assert_eq!(world.entities[&EntityId(1)].attributes["population"], 120);
+        assert_eq!(world.resource_sites.len(), 4);
     }
 
     #[test]
@@ -382,7 +468,145 @@ mod tests {
                 .any(|event| matches!(event.payload, EventPayload::ResourceStockChanged { .. }))
         );
         assert_eq!(left.entities[&EntityId(1)].attributes["food"], 910);
-        assert_eq!(left.entities[&EntityId(1)].attributes["timber"], 518);
+        assert_eq!(left.entities[&EntityId(1)].attributes["timber"], 500);
+    }
+
+    #[test]
+    fn ecological_regeneration_respects_site_capacity_and_emits_typed_stock_events() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(42);
+        let forest_id = *world
+            .resource_sites
+            .iter()
+            .find(|(_, site)| site.kind.as_str() == "forest_biomass")
+            .map(|(id, _)| id)
+            .expect("starter forest exists");
+        let forest = world.resource_sites.get_mut(&forest_id).expect("forest");
+        forest.stock = forest.capacity - 2;
+
+        let events = engine.advance_tick(&mut world).expect("ecological tick");
+        let forest = world.resource_sites.get(&forest_id).expect("forest");
+        assert_eq!(forest.stock, forest.capacity);
+        assert!(events.iter().any(|event| matches!(
+            &event.payload,
+            EventPayload::ResourceStockChanged {
+                site_id,
+                resource,
+                delta: 2,
+            } if *site_id == forest_id && resource == "forest_biomass"
+        )));
+        let stone = world
+            .resource_sites
+            .values()
+            .find(|site| site.kind.as_str() == "stone")
+            .expect("starter stone site");
+        assert_eq!(stone.regeneration_per_tick, 0);
+    }
+
+    #[test]
+    fn legacy_world_snapshot_defaults_missing_resource_sites() {
+        let world = WorldState::starter(44);
+        let mut snapshot = serde_json::to_value(&world).expect("serialize world");
+        snapshot
+            .as_object_mut()
+            .expect("world snapshot object")
+            .remove("resource_sites");
+        let decoded: WorldState =
+            serde_json::from_value(snapshot).expect("deserialize legacy snapshot");
+        assert!(decoded.resource_sites.is_empty());
+        assert_eq!(decoded.ruleset_version, 3);
+    }
+
+    #[test]
+    fn starter_resource_sites_occupy_distinct_non_settlement_cells() {
+        let world = WorldState::starter(46);
+        let settlement_positions: Vec<_> = world
+            .entities
+            .values()
+            .filter(|entity| entity.kind == EntityKind::Settlement)
+            .filter_map(|entity| entity.location)
+            .collect();
+        let mut resource_positions = Vec::new();
+        for site in world.resource_sites.values() {
+            assert!(!settlement_positions.contains(&site.location));
+            assert!(!resource_positions.contains(&site.location));
+            resource_positions.push(site.location);
+        }
+        assert_eq!(resource_positions.len(), 4);
+    }
+
+    #[test]
+    fn resource_site_registration_rejects_invalid_capacity_and_location() {
+        let mut world = WorldState::starter(45);
+        assert_eq!(
+            world.add_resource_site(
+                "Invalid reserve".into(),
+                crate::world::ResourceKind::Stone,
+                crate::geography::GridPoint { x: 0, y: 0 },
+                20,
+                10,
+                0,
+            ),
+            Err(crate::world::ResourceSiteError::StockExceedsCapacity)
+        );
+        assert_eq!(
+            world.add_resource_site(
+                "Outside map".into(),
+                crate::world::ResourceKind::Stone,
+                crate::geography::GridPoint {
+                    x: u16::MAX,
+                    y: u16::MAX,
+                },
+                0,
+                10,
+                0,
+            ),
+            Err(crate::world::ResourceSiteError::InvalidLocation)
+        );
+        assert_eq!(world.resource_sites.len(), 4);
+    }
+
+    #[test]
+    fn invalid_resource_site_state_rejects_tick_without_mutation() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(43);
+        let site = world
+            .resource_sites
+            .values_mut()
+            .next()
+            .expect("resource site");
+        site.stock = site.capacity + 1;
+        let before = world.clone();
+
+        assert!(engine.advance_tick(&mut world).is_err());
+        assert_eq!(world, before);
+    }
+
+    #[test]
+    fn food_shortage_is_explicit_and_inventory_never_becomes_negative() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(47);
+        let settlement = world
+            .entities
+            .get_mut(&EntityId(1))
+            .expect("starter settlement");
+        settlement.attributes.insert("food".into(), 0_u64.into());
+        settlement
+            .attributes
+            .insert("food_production".into(), 0_u64.into());
+
+        let events = engine.advance_tick(&mut world).expect("shortage tick");
+        assert_eq!(world.entities[&EntityId(1)].attributes["food"], 0);
+        assert_eq!(world.entities[&EntityId(1)].attributes["population"], 119);
+        assert!(events.iter().any(|event| matches!(
+            &event.payload,
+            EventPayload::ResourceShortage {
+                entity_id: EntityId(1),
+                resource,
+                quantity: 240,
+                unit,
+            } if resource == "food" && unit == "food_units"
+        )));
     }
 
     #[test]

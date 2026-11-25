@@ -9,6 +9,7 @@ pub use simulation::{
     EventDraft, SimulationEngine, SimulationError, SimulationSystem, SystemError,
 };
 pub use world::{
-    EntityId, EntityKind, EntityRecord, EventEnvelope, EventPayload, Provenance, Tick, WorldId,
+    CURRENT_RULESET_VERSION, EntityId, EntityKind, EntityRecord, EventEnvelope, EventPayload,
+    Provenance, ResourceKind, ResourceSite, ResourceSiteError, ResourceUnit, Tick, WorldId,
     WorldState,
 };

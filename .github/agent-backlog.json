@@ -15,7 +15,7 @@
         "All release-readiness CI gates pass on the exact PR head"
       ],
       "status": "in_progress",
-      "progress": "Implemented: seeded starter world, two settlements, typed 8x6 geography, deterministic food/timber/population/treasury tick, PostgreSQL snapshots and append-only events, create/inspect/step browser/API flow, and deterministic replay verification. Remaining for the broader W1 milestone: ecological resource sites, population cohorts/households, labor/production/inventories, inter-settlement trade and stronger persistence/replay scaling."
+      "progress": "Implemented: seeded starter world, two settlements, deterministic 8x6 geography, four typed ecological resource sites (forest biomass, stone, iron ore, freshwater), stock/capacity/unit/regeneration model, capped natural regeneration events, ruleset v2, PostgreSQL snapshots and append-only events, create/inspect/step/replay API, and browser map/resource/replay views. Remaining: households/cohorts, labor/production/inventories, extraction, logistics/trade, and finance beyond starter taxation."
     },
     {
       "id": "QA-READY-001",

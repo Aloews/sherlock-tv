@@ -6,7 +6,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldId, WorldState,
+    CURRENT_RULESET_VERSION, EntityKind, EventEnvelope, EventPayload, ResourceUnit,
+    SimulationEngine, TerrainKind, WorldId, WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, net::SocketAddr};
@@ -51,6 +52,20 @@ struct MapCellView {
     soil_fertility: u8,
     water_access: bool,
     settlements: Vec<String>,
+    resource_sites: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ResourceSiteView {
+    id: u64,
+    name: String,
+    kind: &'static str,
+    x: u16,
+    y: u16,
+    stock: u64,
+    unit: &'static str,
+    capacity: u64,
+    regeneration_per_tick: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -78,6 +93,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    resource_sites: Vec<ResourceSiteView>,
     map: MapView,
     recent_events: Vec<EventView>,
 }
@@ -114,6 +130,9 @@ fn event_type(event: &EventEnvelope) -> String {
         EventPayload::PopulationChanged { .. } => "population_changed".into(),
         EventPayload::ResourceStockChanged { resource, .. } => {
             format!("resource_stock_changed:{resource}")
+        }
+        EventPayload::ResourceShortage { resource, .. } => {
+            format!("resource_shortage:{resource}")
         }
         EventPayload::ProductionCompleted { good, .. } => {
             format!("production_completed:{good}")
@@ -198,9 +217,34 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
                     })
                     .map(|entity| entity.name.clone())
                     .collect(),
+                resource_sites: world
+                    .resource_sites
+                    .values()
+                    .filter(|site| site.location == cell.position)
+                    .map(|site| site.name.clone())
+                    .collect(),
             })
             .collect(),
     };
+
+    let resource_sites = world
+        .resource_sites
+        .values()
+        .map(|site| ResourceSiteView {
+            id: site.id.0,
+            name: site.name.clone(),
+            kind: site.kind.as_str(),
+            x: site.location.x,
+            y: site.location.y,
+            stock: site.stock,
+            unit: match site.kind.unit() {
+                ResourceUnit::CubicMeters => "м³",
+                ResourceUnit::Tonnes => "т",
+            },
+            capacity: site.capacity,
+            regeneration_per_tick: site.regeneration_per_tick,
+        })
+        .collect();
 
     let recent_events = world
         .event_log
@@ -224,6 +268,7 @@ fn world_view(world: &WorldState) -> Result<WorldView, StatusCode> {
         entity_count: world.entities.len(),
         event_count: world.event_log.len(),
         settlements,
+        resource_sites,
         map,
         recent_events,
     })
@@ -429,7 +474,7 @@ async fn verify_replay(
 ) -> Result<Json<ReplayView>, StatusCode> {
     const MAX_REPLAY_TICKS: u64 = 100_000;
     let world = load_world(&state.pool, database_id(world_id)?).await?;
-    if world.tick.0 > MAX_REPLAY_TICKS {
+    if world.tick.0 > MAX_REPLAY_TICKS || world.ruleset_version != CURRENT_RULESET_VERSION {
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
@@ -539,7 +584,21 @@ mod tests {
         .0;
         assert_eq!(created.seed, 77);
         assert_eq!(created.tick, 0);
+        assert_eq!(created.ruleset_version, CURRENT_RULESET_VERSION);
         assert_eq!(created.settlements.len(), 2);
+        assert_eq!(created.resource_sites.len(), 4);
+        assert!(
+            created
+                .resource_sites
+                .iter()
+                .any(|site| site.kind == "forest_biomass")
+        );
+        assert!(
+            created
+                .resource_sites
+                .iter()
+                .any(|site| site.kind == "iron_ore")
+        );
         assert_eq!((created.settlements[0].x, created.settlements[0].y), (2, 2));
         assert_eq!((created.settlements[1].x, created.settlements[1].y), (5, 4));
         assert_eq!(
@@ -561,6 +620,19 @@ mod tests {
             .find(|cell| cell.x == 2 && cell.y == 2)
             .expect("settlement map cell");
         assert_eq!(river_cell.settlements, vec!["Речной край"]);
+        let forest = created
+            .resource_sites
+            .iter()
+            .find(|site| site.kind == "forest_biomass")
+            .expect("starter forest resource");
+        let forest_cell = created
+            .map
+            .cells
+            .iter()
+            .find(|cell| cell.x == forest.x && cell.y == forest.y)
+            .expect("forest map cell");
+        assert!(forest_cell.resource_sites.contains(&forest.name));
+        assert_eq!(forest.unit, "м³");
         let loaded = get_world(Path(created.world_id), State(state))
             .await
             .expect("load persisted world")
@@ -586,7 +658,15 @@ mod tests {
         assert_eq!(response.world.tick, 1);
         assert!(response.emitted_events >= 5);
         assert_eq!(response.world.settlements[0].food, 910);
-        assert_eq!(response.world.settlements[0].timber, 518);
+        assert_eq!(response.world.settlements[0].timber, 500);
+        let forest = response
+            .world
+            .resource_sites
+            .iter()
+            .find(|site| site.kind == "forest_biomass")
+            .expect("forest resource after tick");
+        assert_eq!(forest.stock, 858);
+        assert_eq!(forest.regeneration_per_tick, 8);
         assert_eq!(response.world.event_count, 1 + response.emitted_events);
         let loaded = get_world(Path(created.world_id), State(state))
             .await
@@ -622,6 +702,37 @@ mod tests {
         assert!(replay.snapshot_matches);
         assert!(replay.event_log_matches);
         assert!(replay.verified);
+    }
+
+    #[tokio::test]
+    async fn replay_rejects_unsupported_legacy_ruleset() {
+        let state = test_state().await;
+        let created = create_world(
+            State(state.clone()),
+            Json(CreateWorldRequest { seed: Some(2027) }),
+        )
+        .await
+        .expect("world creation")
+        .0;
+        let database_id = database_id(created.world_id).expect("database id");
+        let mut world = load_world(&state.pool, database_id)
+            .await
+            .expect("load world");
+        world.ruleset_version = 2;
+        let snapshot = serde_json::to_value(&world).expect("serialize legacy fixture");
+        sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
+            .bind(database_id)
+            .bind(snapshot)
+            .execute(&state.pool)
+            .await
+            .expect("store legacy fixture");
+
+        assert_eq!(
+            verify_replay(Path(created.world_id), State(state))
+                .await
+                .unwrap_err(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
     }
 
     #[tokio::test]
