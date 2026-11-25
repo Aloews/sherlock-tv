@@ -14,8 +14,8 @@
         "Browser controls call the real API and render returned state",
         "All release-readiness CI gates pass on the exact PR head"
       ],
-      "status": "in_progress",
-      "progress": "Implemented: seeded starter world, two settlements, typed 8x6 geography, deterministic food/timber/population/treasury tick, PostgreSQL snapshots and append-only events, create/inspect/step browser/API flow, and deterministic replay verification. Remaining for the broader W1 milestone: ecological resource sites, population cohorts/households, labor/production/inventories, inter-settlement trade and stronger persistence/replay scaling."
+      "status": "completed",
+      "progress": "Merged to main as f7d0a64e4abf79efb0a7a2b8db87deca1e576615. Two-settlement world, deterministic ticks, PostgreSQL snapshots and append-only events, create/load/step/replay API, Leptos map and event timeline. Exact-main CI run 45642273968 passed format, Clippy, PostgreSQL-backed tests, WASM check and release build."
     },
     {
       "id": "QA-READY-001",
@@ -27,8 +27,34 @@
         "No unresolved high-severity review findings",
         "Readiness report links to CI run and commit"
       ],
+      "status": "completed",
+      "progress": "Release-readiness gates passed on exact merged main commit f7d0a64e4abf79efb0a7a2b8db87deca1e576615 in run 45642273968. Replay implementation was independently reviewed and merged from PR #17. Current ecology increment must pass its own exact-head CI before merge."
+    },
+    {
+      "id": "REPLAY-001",
+      "title": "Verify deterministic world replay",
+      "objective": "Rebuild a world from its seed and ruleset, replay committed ticks and compare both the resulting domain snapshot and append-only event stream.",
+      "acceptance": [
+        "Ruleset-aware starter reconstruction",
+        "Replay is bounded and rejects unsupported rulesets",
+        "Snapshot and event-log equality are tested against PostgreSQL-backed worlds"
+      ],
+      "status": "completed",
+      "progress": "Implemented in PR #17 and merged into the playable foundation; exact-head CI passed on main commit f7d0a64e4abf79efb0a7a2b8db87deca1e576615."
+    },
+    {
+      "id": "ECOLOGY-001",
+      "title": "Add spatial resource sites and capped regeneration",
+      "objective": "Generate resource sites from terrain and evolve renewable/non-renewable stocks with explicit units, capacity constraints and causal events.",
+      "acceptance": [
+        "Resource sites are spatially attached to valid map cells",
+        "Renewable stocks never exceed capacity",
+        "Non-renewable deposits do not regenerate",
+        "Deterministic replay reproduces resource state and event history",
+        "API and browser expose resource site stocks"
+      ],
       "status": "in_progress",
-      "progress": "Agent review requested in GitHub issue #18. PR #17 replay implementation passed formatting, Clippy, PostgreSQL-backed workspace tests, WASM check and release build on exact head bc014169664f9415cb3d3ada9c186a1ecaa5532a. PR #16 must be rechecked on its post-merge head before acceptance."
+      "progress": "Implemented on feature/ecology-resource-sites: ruleset-v2 resource sites for fish, timber, stone, iron and wild food; capped regeneration; causal stock-change events; API and Leptos resource display. Awaiting exact-head CI. Extraction, consumption and carrying capacity remain."
     },
     {
       "id": "WORLD-001",
@@ -39,8 +65,8 @@
         "Adjacency and region invariants have tests",
         "Serialization round-trips preserve domain state"
       ],
-      "status": "in_progress",
-      "progress": "Typed grid, starter terrain/climate, river access, regions, adjacency and serialization tests implemented; hydrology and resource-site placement remain."
+      "status": "completed",
+      "progress": "Typed 8x6 grid, deterministic terrain/climate, elevation in meters, fertility index, river corridor, water access, regions, orthogonal adjacency, settlement locations, serialization and API/browser map rendering are implemented and covered by tests."
     },
     {
       "id": "WORLD-002",
