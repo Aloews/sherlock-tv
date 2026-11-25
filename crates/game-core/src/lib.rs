@@ -1,7 +1,9 @@
+pub mod ecology;
 pub mod geography;
 pub mod simulation;
 pub mod world;
 
+pub use ecology::{EcologySystem, ResourceKind, ResourceSite, ResourceSiteError};
 pub use geography::{
     ClimateBand, GridPoint, MapCell, MapError, Region, RegionId, TerrainKind, WorldMap,
 };
