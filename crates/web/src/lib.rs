@@ -316,7 +316,7 @@ fn WorldDashboard() -> impl IntoView {
                                 }).collect_view()}
                             </div>
                             <div class="map-legend">
-                                <span>"П — равнины"</span><span>"Л — лес"</span><span>"Х — холмы"</span><span>"Г — горы"</span><span>"Р — река"</span>
+                                <span>"П — равнины"</span><span>"Л — лес"</span><span>"Х — холмы"</span><span>"Г — горы"</span><span>"Р — река"</span><span>"◆ — ресурсный участок"</span>
                             </div>
                         </section>
                         <section class="resource-panel">
