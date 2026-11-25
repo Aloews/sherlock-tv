@@ -30,7 +30,7 @@ struct WorldSummary {
     entity_count: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct TickResponse {
     world_id: u64,
     tick: u64,
