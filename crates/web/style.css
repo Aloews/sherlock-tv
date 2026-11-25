@@ -78,3 +78,9 @@ footer { padding-top: 20px; border-top: 1px solid #ffffff20; }
 .terrain-mountain { background: #777e83; }
 .terrain-river { background: #376f91; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: #91a1b3; font-size: 10px; }
+
+
+.replay-result { margin: 20px 0 28px; padding: 20px 22px; border: 1px solid #ffffff24; border-radius: 12px; background: #ffffff08; }
+.replay-result h3 { margin: 8px 0; font-size: 20px; }
+.replay-result > p:not(.eyebrow) { color: #aebdca; font-size: 12px; }
+.replay-checks { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; color: #b7d4c7; font-size: 12px; }
