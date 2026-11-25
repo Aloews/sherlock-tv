@@ -1,3 +1,18 @@
+fn choose_resource_position(
+    world: &WorldState,
+    preferred: &[crate::geography::TerrainKind],
+    used: &[GridPoint],
+) -> GridPoint {
+    world
+        .geography
+        .cells
+        .iter()
+        .find(|cell| preferred.contains(&cell.terrain) && !used.contains(&cell.position))
+        .or_else(|| world.geography.cells.iter().find(|cell| !used.contains(&cell.position)))
+        .map(|cell| cell.position)
+        .unwrap_or(GridPoint { x: 0, y: 0 })
+}
+
 use crate::geography::{GridPoint, WorldMap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -136,6 +151,65 @@ pub struct WorldState {
     pub event_log: Vec<EventEnvelope>,
     pub geography: WorldMap,
     pub entities: BTreeMap<EntityId, EntityRecord>,
+    pub resource_sites: BTreeMap<EntityId, ResourceSite>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceKind {
+    ForestBiomass,
+    Stone,
+    IronOre,
+    FreshWater,
+}
+
+impl ResourceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ForestBiomass => "forest_biomass",
+            Self::Stone => "stone",
+            Self::IronOre => "iron_ore",
+            Self::FreshWater => "fresh_water",
+        }
+    }
+
+    pub fn unit(self) -> ResourceUnit {
+        match self {
+            Self::ForestBiomass | Self::Stone => ResourceUnit::CubicMeters,
+            Self::IronOre => ResourceUnit::Tonnes,
+            Self::FreshWater => ResourceUnit::CubicMeters,
+        }
+    }
+
+    pub fn is_renewable(self) -> bool {
+        matches!(self, Self::ForestBiomass | Self::FreshWater)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceUnit {
+    CubicMeters,
+    Tonnes,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResourceSite {
+    pub id: EntityId,
+    pub name: String,
+    pub kind: ResourceKind,
+    pub location: GridPoint,
+    pub stock: u64,
+    pub capacity: u64,
+    pub regeneration_per_tick: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResourceSiteError {
+    InvalidLocation,
+    StockExceedsCapacity,
+    NonRenewableRegeneration,
+    EntityIdExhausted,
 }
 
 struct SettlementSetup {
@@ -159,6 +233,7 @@ impl WorldState {
             event_log: Vec::new(),
             geography: WorldMap::starter(seed),
             entities: BTreeMap::new(),
+            resource_sites: BTreeMap::new(),
         }
     }
 
@@ -194,6 +269,70 @@ impl WorldState {
                 timber_regeneration: 12,
             },
         );
+
+        let mut used_positions = Vec::new();
+        let forest_position =
+            choose_resource_position(&world, &[crate::geography::TerrainKind::Forest], &used_positions);
+        used_positions.push(forest_position);
+        let stone_position = choose_resource_position(
+            &world,
+            &[crate::geography::TerrainKind::Mountain, crate::geography::TerrainKind::Hills],
+            &used_positions,
+        );
+        used_positions.push(stone_position);
+        let iron_position = choose_resource_position(
+            &world,
+            &[crate::geography::TerrainKind::Mountain],
+            &used_positions,
+        );
+        used_positions.push(iron_position);
+        let water_position = choose_resource_position(
+            &world,
+            &[crate::geography::TerrainKind::River],
+            &used_positions,
+        );
+
+        let forest = world
+            .add_resource_site(
+                "Лесной массив".into(),
+                ResourceKind::ForestBiomass,
+                forest_position,
+                850,
+                1_200,
+                8,
+            )
+            .expect("valid starter forest");
+        let quarry = world
+            .add_resource_site(
+                "Каменный карьер".into(),
+                ResourceKind::Stone,
+                stone_position,
+                600,
+                1_000,
+                0,
+            )
+            .expect("valid starter quarry");
+        let ore = world
+            .add_resource_site(
+                "Железное месторождение".into(),
+                ResourceKind::IronOre,
+                iron_position,
+                350,
+                700,
+                0,
+            )
+            .expect("valid starter ore deposit");
+        let water = world
+            .add_resource_site(
+                "Речная система".into(),
+                ResourceKind::FreshWater,
+                water_position,
+                8_000,
+                12_000,
+                50,
+            )
+            .expect("valid starter water system");
+
         world.event_log.push(EventEnvelope {
             event_id: 0,
             world_id: world.id,
@@ -201,7 +340,7 @@ impl WorldState {
             sequence: 0,
             actor: "world_factory".into(),
             cause: "starter_scenario_created".into(),
-            affected_entities: vec![river, hill],
+            affected_entities: vec![river, hill, forest, quarry, ore, water],
             ruleset_version: world.ruleset_version,
             provenance: Provenance::ModelAssumption {
                 assumption_id: "starter-settlements-v1".into(),
@@ -238,6 +377,75 @@ impl WorldState {
                 .attributes
                 .insert("tax_rate_basis_points".into(), 500_u64.into());
         }
+    }
+
+    pub fn add_resource_site(
+        &mut self,
+        name: String,
+        kind: ResourceKind,
+        location: GridPoint,
+        stock: u64,
+        capacity: u64,
+        regeneration_per_tick: u64,
+    ) -> Result<EntityId, ResourceSiteError> {
+        if self.geography.cell_at(location).is_none() {
+            return Err(ResourceSiteError::InvalidLocation);
+        }
+        if stock > capacity {
+            return Err(ResourceSiteError::StockExceedsCapacity);
+        }
+        if !kind.is_renewable() && regeneration_per_tick != 0 {
+            return Err(ResourceSiteError::NonRenewableRegeneration);
+        }
+        let id = self
+            .register_entity(EntityKind::ResourceSite, name.clone())
+            .ok_or(ResourceSiteError::EntityIdExhausted)?;
+        if !self.set_entity_location(id, location) {
+            return Err(ResourceSiteError::InvalidLocation);
+        }
+        self.resource_sites.insert(
+            id,
+            ResourceSite {
+                id,
+                name,
+                kind,
+                location,
+                stock,
+                capacity,
+                regeneration_per_tick,
+            },
+        );
+        Ok(id)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        self.geography
+            .validate()
+            .map_err(|error| format!("invalid world geography: {error}"))?;
+        for (id, entity) in &self.entities {
+            if *id != entity.id {
+                return Err(format!("entity key does not match entity id: {}", id.0));
+            }
+        }
+        for (id, site) in &self.resource_sites {
+            if *id != site.id {
+                return Err(format!("resource-site key does not match site id: {}", id.0));
+            }
+            let entity = self
+                .entities
+                .get(id)
+                .ok_or_else(|| format!("resource site {} has no entity record", id.0))?;
+            if entity.kind != EntityKind::ResourceSite || entity.location != Some(site.location) {
+                return Err(format!("resource site {} has inconsistent entity metadata", id.0));
+            }
+            if site.stock > site.capacity {
+                return Err(format!("resource site {} exceeds its capacity", id.0));
+            }
+            if !site.kind.is_renewable() && site.regeneration_per_tick != 0 {
+                return Err(format!("non-renewable resource site {} regenerates", id.0));
+            }
+        }
+        Ok(())
     }
 
     pub fn set_entity_location(&mut self, id: EntityId, position: GridPoint) -> bool {
