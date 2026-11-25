@@ -205,17 +205,19 @@ impl SimulationSystem for CivilizationSystem {
                     },
                 });
             }
-            drafts.push(EventDraft {
-                actor: "economy".into(),
-                cause: "renewable_resource_regrowth".into(),
-                affected_entities: vec![id],
-                provenance: Provenance::GeneratedSimulation,
-                payload: EventPayload::ResourceStockChanged {
-                    site_id: id,
-                    resource: "timber".into(),
-                    delta: timber_delta,
-                },
-            });
+            if timber_delta != 0 {
+                drafts.push(EventDraft {
+                    actor: "economy".into(),
+                    cause: "renewable_resource_regrowth".into(),
+                    affected_entities: vec![id],
+                    provenance: Provenance::GeneratedSimulation,
+                    payload: EventPayload::ResourceStockChanged {
+                        site_id: id,
+                        resource: "timber".into(),
+                        delta: timber_delta,
+                    },
+                });
+            }
 
             let mut next_population = population;
             let mut population_delta = 0_i64;
