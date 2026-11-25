@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, Tick, WorldId,
+    EntityKind, EventEnvelope, EventPayload, SimulationEngine, TerrainKind, WorldId,
     WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -223,6 +223,24 @@ fn database_id(world_id: u64) -> Result<i64, StatusCode> {
     i64::try_from(world_id).map_err(|_| StatusCode::NOT_FOUND)
 }
 
+async fn load_events(
+    connection: &mut sqlx::PgConnection,
+    world_id: i64,
+) -> Result<Vec<EventEnvelope>, StatusCode> {
+    let values = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT event FROM world_events WHERE world_id = $1 ORDER BY sequence",
+    )
+    .bind(world_id)
+    .fetch_all(&mut *connection)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    values
+        .into_iter()
+        .map(serde_json::from_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 async fn load_world(pool: &PgPool, world_id: i64) -> Result<WorldState, StatusCode> {
     let snapshot = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT current_snapshot FROM worlds WHERE id = $1",
@@ -232,8 +250,14 @@ async fn load_world(pool: &PgPool, world_id: i64) -> Result<WorldState, StatusCo
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
-
-    serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    let mut world: WorldState =
+        serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    world.event_log = load_events(&mut connection, world_id).await?;
+    Ok(world)
 }
 
 async fn insert_events(
@@ -338,6 +362,7 @@ async fn advance_tick(
     .ok_or(StatusCode::NOT_FOUND)?;
     let mut world: WorldState =
         serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    world.event_log = load_events(&mut **transaction, database_id).await?;
     let previous_event_count = world.event_log.len();
     let events = SimulationEngine::civilization()
         .advance_tick(&mut world)
@@ -542,7 +567,7 @@ mod tests {
         let mut world = load_world(&state.pool, database_id)
             .await
             .expect("load world");
-        world.tick = Tick(u64::MAX);
+        world.tick = sherlock_game_core::Tick(u64::MAX);
         let snapshot = serde_json::to_value(&world).expect("serialize overflow snapshot");
         sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
             .bind(database_id)
