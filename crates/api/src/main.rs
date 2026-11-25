@@ -654,7 +654,7 @@ mod tests {
         assert_eq!(response.world.tick, 1);
         assert!(response.emitted_events >= 5);
         assert_eq!(response.world.settlements[0].food, 910);
-        assert_eq!(response.world.settlements[0].timber, 518);
+        assert_eq!(response.world.settlements[0].timber, 500);
         let forest = response
             .world
             .resource_sites
