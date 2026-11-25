@@ -1,4 +1,9 @@
-use axum::{Json, Router, extract::State, http::StatusCode, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    routing::{get, post},
+};
 use serde::Serialize;
 use sherlock_game_core::{SimulationEngine, WorldState};
 use std::{env, net::SocketAddr, sync::Arc};
@@ -53,7 +58,9 @@ async fn world_summary(State(state): State<AppState>) -> Json<WorldSummary> {
 async fn advance_tick(State(state): State<AppState>) -> Result<Json<TickResponse>, StatusCode> {
     let mut world = state.world.write().await;
     let engine = SimulationEngine::new(Vec::new());
-    let events = engine.advance_tick(&mut world).map_err(|_| StatusCode::CONFLICT)?;
+    let events = engine
+        .advance_tick(&mut world)
+        .map_err(|_| StatusCode::CONFLICT)?;
     Ok(Json(TickResponse {
         world_id: world.id.0,
         tick: world.tick.0,
@@ -134,6 +141,9 @@ mod tests {
             world: Arc::new(RwLock::new(WorldState::new(42, 1))),
         };
         state.world.write().await.tick = sherlock_game_core::Tick(u64::MAX);
-        assert_eq!(advance_tick(State(state)).await.unwrap_err(), StatusCode::CONFLICT);
+        assert_eq!(
+            advance_tick(State(state)).await.unwrap_err(),
+            StatusCode::CONFLICT
+        );
     }
 }
