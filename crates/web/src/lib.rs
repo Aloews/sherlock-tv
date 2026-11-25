@@ -15,6 +15,7 @@ struct WorldView {
     entity_count: usize,
     event_count: usize,
     settlements: Vec<SettlementView>,
+    resource_sites: Vec<ResourceSiteView>,
     map: MapView,
     recent_events: Vec<EventView>,
 }
@@ -36,6 +37,18 @@ struct MapCellView {
     soil_fertility: u8,
     water_access: bool,
     settlements: Vec<String>,
+    resources: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ResourceSiteView {
+    id: u64,
+    kind: String,
+    x: u16,
+    y: u16,
+    stock_units: u64,
+    capacity_units: u64,
+    regeneration_units_per_tick: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -259,6 +272,7 @@ fn WorldDashboard() -> impl IntoView {
                             <div><span>"НАСЕЛЕНИЕ"</span><strong>{current.settlements.iter().map(|s| s.population).sum::<u64>()}</strong></div>
                             <div><span>"ПОСЕЛЕНИЯ"</span><strong>{current.settlements.len()}</strong></div>
                             <div><span>"СОБЫТИЯ"</span><strong>{current.event_count}</strong></div>
+                            <div><span>"РЕСУРСНЫЕ УЧАСТКИ"</span><strong>{current.resource_sites.len()}</strong></div>
                             <div><span>"SEED / RULESET"</span><strong>{format!("{} / {}", current.seed, current.ruleset_version)}</strong></div>
                         </div>
                         <section class="map-panel">
@@ -288,7 +302,7 @@ fn WorldDashboard() -> impl IntoView {
                                         cell.elevation_meters,
                                         cell.soil_fertility,
                                         if cell.water_access { "есть" } else { "нет" },
-                                        cell.settlements.join(", ")
+                                        format!("{} · {}", cell.settlements.join(", "), cell.resources.join(", "))
                                     );
                                     view! {
                                         <div class=class_name title=title>
@@ -314,6 +328,21 @@ fn WorldDashboard() -> impl IntoView {
                                 </article>
                             }).collect_view()}
                         </div>
+                        <section class="resource-sites-panel">
+                            <div class="section-heading">
+                                <div><p class="eyebrow">"ПРИРОДНЫЕ РЕСУРСЫ"</p><h3>"Месторождения и угодья"</h3></div>
+                                <span>{format!("{} участков", current.resource_sites.len())}</span>
+                            </div>
+                            <div class="resource-sites-grid">
+                                {current.resource_sites.into_iter().take(8).map(|site| view! {
+                                    <article class="resource-site-card">
+                                        <div class="resource-site-top"><strong>{site.kind}</strong><span>{format!("#{}", site.id)}</span></div>
+                                        <div class="resource-site-stock">{format!("{} / {} ед.", site.stock_units, site.capacity_units)}</div>
+                                        <p>{format!("Координаты {}, {} · восстановление {} ед./ход", site.x, site.y, site.regeneration_units_per_tick)}</p>
+                                    </article>
+                                }).collect_view()}
+                            </div>
+                        </section>
                         <section class="event-history">
                             <div class="section-heading">
                                 <div><p class="eyebrow">"ХРОНИКА"</p><h3>"Последние события"</h3></div>
