@@ -483,6 +483,48 @@ mod tests {
     }
 
     #[test]
+    fn legacy_world_snapshot_defaults_missing_resource_sites() {
+        let world = WorldState::starter(44);
+        let mut snapshot = serde_json::to_value(&world).expect("serialize world");
+        snapshot
+            .as_object_mut()
+            .expect("world snapshot object")
+            .remove("resource_sites");
+        let decoded: WorldState =
+            serde_json::from_value(snapshot).expect("deserialize legacy snapshot");
+        assert!(decoded.resource_sites.is_empty());
+        assert_eq!(decoded.ruleset_version, 2);
+    }
+
+    #[test]
+    fn resource_site_registration_rejects_invalid_capacity_and_location() {
+        let mut world = WorldState::starter(45);
+        assert_eq!(
+            world.add_resource_site(
+                "Invalid reserve".into(),
+                crate::world::ResourceKind::Stone,
+                crate::geography::GridPoint { x: 0, y: 0 },
+                20,
+                10,
+                0,
+            ),
+            Err(crate::world::ResourceSiteError::StockExceedsCapacity)
+        );
+        assert_eq!(
+            world.add_resource_site(
+                "Outside map".into(),
+                crate::world::ResourceKind::Stone,
+                crate::geography::GridPoint { x: u16::MAX, y: u16::MAX },
+                0,
+                10,
+                0,
+            ),
+            Err(crate::world::ResourceSiteError::InvalidLocation)
+        );
+        assert_eq!(world.resource_sites.len(), 4);
+    }
+
+    #[test]
     fn invalid_resource_site_state_rejects_tick_without_mutation() {
         let engine = SimulationEngine::civilization();
         let mut world = WorldState::starter(43);
