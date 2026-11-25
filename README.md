@@ -54,6 +54,7 @@ Open the local Trunk URL. Set the API address in the client to the reachable API
 - `POST /api/v1/world` — create and persist a seeded world.
 - `GET /api/v1/world/{world_id}` — load a persisted world.
 - `POST /api/v1/world/{world_id}/tick` — atomically advance one tick, persist the new snapshot and append events.
+- `GET /api/v1/world/{world_id}/replay` — rebuild from the seed and verify the stored snapshot and event history.
 
 The starter world is a prototype scenario with abstract food, timber and treasury units. It is not a historical reconstruction. PostgreSQL stores one JSONB state snapshot per tick and a separate append-only event stream. The current schema does not yet provide replay from genesis, authentication, multi-user authorization or production hardening.
 
