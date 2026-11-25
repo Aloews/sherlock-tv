@@ -40,3 +40,8 @@ The next persistence milestone will add PostgreSQL snapshots and append-only eve
 ## Starter geography units
 
 The starter map is an 8 × 6 grid. Coordinates are zero-based integer cell indices; adjacency is orthogonal (north, south, east, west). Elevation is measured in meters. Soil fertility is a dimensionless index from 0 to 100. Food and timber stocks, production and consumption are abstract simulation units, not kilograms or tonnes. Treasury is an integer monetary balance in abstract minor units; tax rates are basis points. Starter values are model assumptions, not historical observations. The initial scenario event records the starter-scenario assumption provenance.
+
+
+## Persistence boundary
+
+The API stores one authoritative JSONB world snapshot per world and an append-only event row for each committed event. Each successful tick updates the current world snapshot, appends a tick snapshot and inserts all events in one PostgreSQL transaction while holding a row lock for that world. A failed simulation tick leaves the stored snapshot and event log unchanged. The current schema does not yet implement deterministic replay, event compaction, schema-upgrade compatibility for historical snapshots, or multi-user authorization.
