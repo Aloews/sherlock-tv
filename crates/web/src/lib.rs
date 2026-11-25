@@ -115,7 +115,10 @@ fn WorldDashboard() -> impl IntoView {
                 if !response.ok() {
                     return Err(format!("API вернул HTTP {}", response.status()));
                 }
-                response.json::<WorldView>().await.map_err(|error| error.to_string())
+                response
+                    .json::<WorldView>()
+                    .await
+                    .map_err(|error| error.to_string())
             }
             .await;
             match result {
@@ -138,10 +141,11 @@ fn WorldDashboard() -> impl IntoView {
         set_status.set("Выполняется ход…".into());
         leptos::task::spawn_local(async move {
             let result = async {
-                let response = gloo_net::http::Request::post(&format!("{base}/api/v1/world/{id}/tick"))
-                    .send()
-                    .await
-                    .map_err(|error| error.to_string())?;
+                let response =
+                    gloo_net::http::Request::post(&format!("{base}/api/v1/world/{id}/tick"))
+                        .send()
+                        .await
+                        .map_err(|error| error.to_string())?;
                 if !response.ok() {
                     return Err(format!("API вернул HTTP {}", response.status()));
                 }

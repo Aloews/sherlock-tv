@@ -242,11 +242,9 @@ async fn insert_events(
     events: &[EventEnvelope],
 ) -> Result<(), StatusCode> {
     for event in events {
-        let sequence =
-            i64::try_from(event.sequence).map_err(|_| StatusCode::CONFLICT)?;
+        let sequence = i64::try_from(event.sequence).map_err(|_| StatusCode::CONFLICT)?;
         let tick = i64::try_from(event.tick.0).map_err(|_| StatusCode::CONFLICT)?;
-        let payload =
-            serde_json::to_value(event).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let payload = serde_json::to_value(event).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         sqlx::query(
             "INSERT INTO world_events (world_id, sequence, tick, event_type, event) VALUES ($1, $2, $3, $4, $5)",
         )
@@ -287,8 +285,7 @@ async fn create_world(
     for event in &mut world.event_log {
         event.world_id = world.id;
     }
-    let snapshot =
-        serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let snapshot = serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
         .bind(world_id)
         .bind(&snapshot)
@@ -345,8 +342,7 @@ async fn advance_tick(
     let events = SimulationEngine::civilization()
         .advance_tick(&mut world)
         .map_err(|_| StatusCode::CONFLICT)?;
-    let snapshot =
-        serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let snapshot = serde_json::to_value(&world).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tick = i64::try_from(world.tick.0).map_err(|_| StatusCode::CONFLICT)?;
     sqlx::query(
         "UPDATE worlds SET tick = $2, current_snapshot = $3, updated_at = NOW() WHERE id = $1",
@@ -425,7 +421,8 @@ mod tests {
     use super::*;
 
     async fn test_state() -> AppState {
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is set for integration tests");
+        let database_url =
+            env::var("DATABASE_URL").expect("DATABASE_URL is set for integration tests");
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(&database_url)
@@ -460,7 +457,14 @@ mod tests {
         assert_eq!(created.settlements.len(), 2);
         assert_eq!((created.settlements[0].x, created.settlements[0].y), (2, 2));
         assert_eq!((created.settlements[1].x, created.settlements[1].y), (5, 4));
-        assert_eq!(created.settlements.iter().map(|s| s.population).sum::<u64>(), 200);
+        assert_eq!(
+            created
+                .settlements
+                .iter()
+                .map(|s| s.population)
+                .sum::<u64>(),
+            200
+        );
         assert_eq!(created.event_count, 1);
         assert_eq!(created.map.width, 8);
         assert_eq!(created.map.height, 6);
@@ -535,7 +539,9 @@ mod tests {
         .expect("world creation")
         .0;
         let database_id = database_id(created.world_id).expect("database id");
-        let mut world = load_world(&state.pool, database_id).await.expect("load world");
+        let mut world = load_world(&state.pool, database_id)
+            .await
+            .expect("load world");
         world.tick = Tick(u64::MAX);
         let snapshot = serde_json::to_value(&world).expect("serialize overflow snapshot");
         sqlx::query("UPDATE worlds SET current_snapshot = $2 WHERE id = $1")
