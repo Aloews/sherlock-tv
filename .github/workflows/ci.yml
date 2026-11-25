@@ -1,0 +1,38 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sherlock-rust-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, lint, test and WASM check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Generate dependency lock
+        run: cargo generate-lockfile
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Run tests
+        run: cargo test --workspace --all-targets
+      - name: Check browser client
+        run: cargo check -p sherlock-web --target wasm32-unknown-unknown
+      - name: Release build
+        run: cargo build --release -p sherlock-api

@@ -2,11 +2,11 @@
 
 ## Product
 
-Sherlock is a persistent, systemic simulation of human civilization. It models how material conditions, people, knowledge, organizations, institutions, power and culture interact over time. The world must produce its own history through rules, constraints, decisions, incomplete information and shocks; it is not a scripted sequence of historical events.
+Sherlock is a persistent, systemic simulation of human civilization. It models how material conditions, people, knowledge, organizations, institutions, power and culture interact over time. The world produces its own history through rules, constraints, decisions, incomplete information and shocks; it is not a scripted sequence of historical events.
 
 The simulation is the primary product. Football, sports organizations and real-world football data are optional specialized domains that participate in the same economy and institutions. They must not dictate the architecture.
 
-## Connected world systems
+## Connected systems
 
 1. **Planet and ecology:** geography, climate, water, soil, minerals, energy, biodiversity and natural hazards.
 2. **People and settlements:** individuals, households, skills, health, education, birth, death, migration, cities and social groups.
@@ -18,32 +18,26 @@ The simulation is the primary product. Football, sports organizations and real-w
 8. **Dynasties and intergenerational capital:** families, inheritance, alliances, ownership, reputation, education and succession.
 9. **Culture and shared belief:** language, identity, religion, myths, status, trust, norms, media and expectations.
 10. **Historical memory:** archives, records, education, institutional learning and reinterpretation.
-11. **Specialized domains:** football and other industries built on shared population, labor, capital, infrastructure, finance and cultural systems.
-
-## Causal model
-
-Environment and resources influence settlement and population; population and education shape labor and knowledge; knowledge and capital shape production; production and exchange create surplus and distribution; finance reallocates resources through time; organizations and institutions coordinate or constrain activity; power shapes rules and access; culture and expectations influence trust, cooperation and investment; outcomes feed back into ecology, demography, institutions and memory.
-
-This is a feedback-rich hypothesis, not a universal one-way law. Crises, stagnation, adaptation and divergent outcomes must be possible.
+11. **Specialized domains:** football and other industries built on shared population, labor, capital, infrastructure, finance and culture.
 
 ## Player and observer
 
-The player may act as an individual, household, organization, dynasty, state or independent observer depending on the scenario. This role is scenario configuration, not a hard-coded assumption in the world kernel. Actions require resources, access and information, and can create delayed or unintended consequences.
+The player may act as an individual, household, organization, dynasty, state or independent observer depending on the scenario. The role is scenario configuration, not a hard-coded assumption in the world kernel. Actions require resources, access and information, and can create delayed or unintended consequences.
 
 ## Time and knowledge
 
 The simulation supports pause, single-step and fast-forward. Different systems may operate at different frequencies. Agents act on information they possess or believe, not omniscient world state.
 
-## Historical evidence
+## Evidence model
 
-Historical source records, scholarly interpretations, model assumptions, derived estimates and generated simulation outcomes must remain distinct. Imported facts require provenance and uncertainty where available. Conflicting sources must remain representable; generated events must never be presented as verified history or current real-world data.
+Historical source records, scholarly interpretations, model assumptions, derived estimates and generated simulation outcomes remain distinct. Imported facts require provenance and uncertainty where available. Conflicting sources remain representable. Generated events are never presented as verified history or current real-world data.
 
 ## Non-negotiable properties
 
 - One connected world, not isolated minigame economies.
 - Causal, inspectable events with actor, cause, time, affected entities and provenance.
 - Generational continuity for people, households, firms, banks, states and institutions.
-- Deterministic replay where practical, with recorded seeds and versioned rulesets.
+- Deterministic replay for a fixed seed, ruleset and input sequence.
 - Explicit units, time scales, ownership and accounting contracts.
 - No silent conversion of estimates or assumptions into facts.
 - Specialized domains integrate through shared domain contracts.

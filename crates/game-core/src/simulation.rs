@@ -1,13 +1,13 @@
+use crate::world::{EntityId, EventEnvelope, EventPayload, Provenance, Tick, WorldState};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use sherlock_domain::{EventEnvelope, EventPayload, Provenance, Tick, WorldState};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventDraft {
     pub actor: String,
     pub cause: String,
-    pub affected_entities: Vec<sherlock_domain::EntityId>,
+    pub affected_entities: Vec<EntityId>,
     pub provenance: Provenance,
     pub payload: EventPayload,
 }
@@ -31,7 +31,9 @@ pub struct SystemError {
 
 impl SystemError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {
+            message: message.into(),
+        }
     }
 }
 
@@ -63,16 +65,17 @@ impl SimulationEngine {
         world: &mut WorldState,
     ) -> Result<Vec<EventEnvelope>, SimulationError> {
         let mut candidate = world.clone();
-        let next_tick = candidate.tick.checked_next().ok_or(SimulationError::TickOverflow)?;
-        let world_seed = candidate.seed;
-        let ruleset_version = candidate.ruleset_version;
+        let next_tick = candidate
+            .tick
+            .checked_next()
+            .ok_or(SimulationError::TickOverflow)?;
         let mut drafts = Vec::new();
 
         for system in &self.systems {
             let mut random = ChaCha8Rng::seed_from_u64(seed_for_system(
-                world_seed,
+                candidate.seed,
                 next_tick,
-                ruleset_version,
+                candidate.ruleset_version,
                 system.id(),
             ));
             let system_drafts = system
@@ -100,10 +103,7 @@ impl SimulationEngine {
                 .checked_add(1)
                 .ok_or(SimulationError::EventSequenceOverflow)?;
             events.push(EventEnvelope {
-                event_id: uuid::Uuid::new_v5(
-                    &candidate.id.0,
-                    format!("{}:{sequence}", next_tick.0).as_bytes(),
-                ),
+                event_id: sequence,
                 world_id: candidate.id,
                 tick: next_tick,
                 sequence,
@@ -122,9 +122,11 @@ impl SimulationEngine {
 }
 
 fn seed_for_system(seed: u64, tick: Tick, ruleset_version: u32, system_id: &str) -> u64 {
-    let stable_system_hash = system_id.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-    });
+    let stable_system_hash = system_id
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
     let mut value = seed
         ^ tick.0.rotate_left(17)
         ^ u64::from(ruleset_version).rotate_left(41)
@@ -139,7 +141,7 @@ fn seed_for_system(seed: u64, tick: Tick, ruleset_version: u32, system_id: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sherlock_domain::{EntityId, EventPayload, Provenance, WorldState};
+    use crate::world::{EntityKind, EventPayload, Provenance, WorldState};
 
     struct RandomEventSystem;
 
@@ -158,7 +160,7 @@ mod tests {
             Ok(vec![EventDraft {
                 actor: "test-system".into(),
                 cause: "test-draw".into(),
-                affected_entities: vec![EntityId(uuid::Uuid::nil())],
+                affected_entities: vec![EntityId(1)],
                 provenance: Provenance::GeneratedSimulation,
                 payload: EventPayload::Custom {
                     domain: "test".into(),
@@ -182,7 +184,7 @@ mod tests {
             _tick: Tick,
             _random: &mut dyn RngCore,
         ) -> Result<Vec<EventDraft>, SystemError> {
-            world.tick = Tick(999);
+            world.register_entity(EntityKind::Person, "temporary".into());
             Err(SystemError::new("deliberate test failure"))
         }
     }
@@ -191,8 +193,9 @@ mod tests {
     fn tick_advances_and_emits_ordered_tick_event() {
         let engine = SimulationEngine::new(vec![]);
         let mut world = WorldState::new(7, 1);
-
-        let events = engine.advance_tick(&mut world).expect("tick should succeed");
+        let events = engine
+            .advance_tick(&mut world)
+            .expect("tick should succeed");
 
         assert_eq!(world.tick, Tick(1));
         assert_eq!(events.len(), 1);
@@ -211,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn same_seed_and_tick_produce_same_random_payload() {
+    fn same_seed_and_tick_produce_same_random_payload_and_events() {
         let engine = SimulationEngine::new(vec![Box::new(RandomEventSystem)]);
         let mut left = WorldState::new(1234, 1);
         let mut right = WorldState::new(1234, 1);
@@ -219,20 +222,8 @@ mod tests {
         let left_events = engine.advance_tick(&mut left).expect("left tick");
         let right_events = engine.advance_tick(&mut right).expect("right tick");
 
-        assert_eq!(left_events[0].payload, right_events[0].payload);
-    }
-
-    #[test]
-    fn replay_from_the_same_snapshot_produces_identical_events_and_state() {
-        let engine = SimulationEngine::new(vec![Box::new(RandomEventSystem)]);
-        let mut original = WorldState::new(9876, 1);
-        let mut replay = original.clone();
-
-        let original_events = engine.advance_tick(&mut original).expect("original tick");
-        let replay_events = engine.advance_tick(&mut replay).expect("replay tick");
-
-        assert_eq!(original_events, replay_events);
-        assert_eq!(original, replay);
+        assert_eq!(left_events, right_events);
+        assert_eq!(left, right);
     }
 
     #[test]
@@ -269,10 +260,23 @@ mod tests {
             Box::new(NamedSystem("alpha")),
         ]);
         let mut world = WorldState::new(1, 1);
-
         let events = engine.advance_tick(&mut world).expect("tick");
 
         assert_eq!(events[0].actor, "alpha");
         assert_eq!(events[1].actor, "zeta");
+    }
+
+    #[test]
+    fn tick_overflow_is_rejected_without_mutation() {
+        let engine = SimulationEngine::new(vec![]);
+        let mut world = WorldState::new(1, 1);
+        world.tick = Tick(u64::MAX);
+        let before = world.clone();
+
+        assert_eq!(
+            engine.advance_tick(&mut world),
+            Err(SimulationError::TickOverflow)
+        );
+        assert_eq!(world, before);
     }
 }

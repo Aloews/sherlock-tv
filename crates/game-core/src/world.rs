@@ -1,38 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct WorldId(pub Uuid);
-
-impl WorldId {
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
-    }
-}
-
-impl Default for WorldId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub struct WorldId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct EntityId(pub Uuid);
-
-impl EntityId {
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
-    }
-}
-
-impl Default for EntityId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub struct EntityId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -83,21 +58,59 @@ pub enum Provenance {
 pub enum EventPayload {
     WorldCreated,
     TickAdvanced,
-    EntityRegistered { entity_id: EntityId, kind: EntityKind },
-    PopulationChanged { settlement_id: EntityId, delta: i64, reason: String },
-    ResourceStockChanged { site_id: EntityId, resource: String, delta: i64 },
-    ProductionCompleted { organization_id: EntityId, good: String, quantity: u64 },
-    TradeSettled { buyer_id: EntityId, seller_id: EntityId, good: String, quantity: u64 },
-    CreditChanged { lender_id: EntityId, borrower_id: EntityId, delta_minor_units: i64 },
-    InstitutionChanged { institution_id: EntityId, change: String },
-    PowerChanged { from_entity: EntityId, to_entity: EntityId, authority: String },
-    CultureChanged { group_id: EntityId, change: String },
-    Custom { domain: String, event_type: String, payload: serde_json::Value },
+    EntityRegistered {
+        entity_id: EntityId,
+        kind: EntityKind,
+    },
+    PopulationChanged {
+        settlement_id: EntityId,
+        delta: i64,
+        reason: String,
+    },
+    ResourceStockChanged {
+        site_id: EntityId,
+        resource: String,
+        delta: i64,
+    },
+    ProductionCompleted {
+        organization_id: EntityId,
+        good: String,
+        quantity: u64,
+    },
+    TradeSettled {
+        buyer_id: EntityId,
+        seller_id: EntityId,
+        good: String,
+        quantity: u64,
+    },
+    CreditChanged {
+        lender_id: EntityId,
+        borrower_id: EntityId,
+        delta_minor_units: i64,
+    },
+    InstitutionChanged {
+        institution_id: EntityId,
+        change: String,
+    },
+    PowerChanged {
+        from_entity: EntityId,
+        to_entity: EntityId,
+        authority: String,
+    },
+    CultureChanged {
+        group_id: EntityId,
+        change: String,
+    },
+    Custom {
+        domain: String,
+        event_type: String,
+        payload: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EventEnvelope {
-    pub event_id: Uuid,
+    pub event_id: u64,
     pub world_id: WorldId,
     pub tick: Tick,
     pub sequence: u64,
@@ -115,6 +128,7 @@ pub struct WorldState {
     pub seed: u64,
     pub ruleset_version: u32,
     pub tick: Tick,
+    pub next_entity_id: u64,
     pub next_event_sequence: u64,
     pub entities: BTreeMap<EntityId, EntityRecord>,
 }
@@ -122,13 +136,29 @@ pub struct WorldState {
 impl WorldState {
     pub fn new(seed: u64, ruleset_version: u32) -> Self {
         Self {
-            id: WorldId::new(),
+            id: WorldId(seed),
             seed,
             ruleset_version,
             tick: Tick(0),
+            next_entity_id: 1,
             next_event_sequence: 0,
             entities: BTreeMap::new(),
         }
     }
 
+    pub fn register_entity(&mut self, kind: EntityKind, name: String) -> Option<EntityId> {
+        let id = EntityId(self.next_entity_id);
+        self.next_entity_id = self.next_entity_id.checked_add(1)?;
+        self.entities.insert(
+            id,
+            EntityRecord {
+                id,
+                kind,
+                name,
+                created_at: self.tick,
+                attributes: BTreeMap::new(),
+            },
+        );
+        Some(id)
+    }
 }

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "description": "Bounded implementation queue for the civilization simulation. Tasks must be implemented and verified against the product contract.",
+  "tasks": [
+    {
+      "id": "WORLD-001",
+      "title": "Define geography and spatial primitives",
+      "objective": "Add typed coordinates, regions, terrain, water bodies, climate bands and map adjacency to game-core without embedding presentation or persistence concerns.",
+      "acceptance": ["Units and coordinate conventions are explicit", "Adjacency and region invariants have tests", "Serialization round-trips preserve domain state"]
+    },
+    {
+      "id": "WORLD-002",
+      "title": "Model ecology and renewable resource flows",
+      "objective": "Implement climate, soil, water, biomass and renewable/non-renewable resource stocks as connected state transitions with explicit units and conservation constraints.",
+      "acceptance": ["Every quantity has an explicit unit", "Stock/flow conservation invariants are tested", "Unknown inputs are not silently replaced with zero"]
+    },
+    {
+      "id": "PEOPLE-001",
+      "title": "Add population cohorts and households",
+      "objective": "Model births, deaths, age cohorts, household membership, skills, health and migration as domain entities with explicit time semantics.",
+      "acceptance": ["Population transitions are deterministic for a fixed seed and ruleset", "Household membership invariants are tested", "Birth/death/migration events retain causal metadata"]
+    },
+    {
+      "id": "ECON-001",
+      "title": "Add labor, production and inventories",
+      "objective": "Implement production functions, labor allocation, inventories and goods with explicit quantities and units. Do not mix prices or financial balances into physical stock quantities.",
+      "acceptance": ["Production consumes declared inputs and produces declared outputs", "Inventory cannot become negative", "Tests cover input constraints and output conservation"]
+    },
+    {
+      "id": "ECON-002",
+      "title": "Add exchange, logistics and trade",
+      "objective": "Model transport capacity, routes, transaction settlement, supply and demand across settlements with explicit ownership and provenance.",
+      "acceptance": ["Trade cannot create goods or money", "Ownership changes are recorded as events", "Route capacity and failed settlement are tested"]
+    },
+    {
+      "id": "FIN-001",
+      "title": "Introduce double-entry accounting",
+      "objective": "Implement currencies, accounts, balanced journal entries, credit, debt, interest and default as a financial subsystem separate from physical resource inventories.",
+      "acceptance": ["Every posted journal entry balances", "Currency and minor-unit precision are explicit", "Credit/default transitions are auditable and tested"]
+    },
+    {
+      "id": "DYNASTY-001",
+      "title": "Connect inheritance to ownership and institutions",
+      "objective": "Integrate dynasty-core succession and inheritance with ownership records in game-core while preserving legal rules and historical context as scenario data.",
+      "acceptance": ["Inheritance transfers ownership without creating assets", "Competing claims can be represented", "Succession is deterministic and auditable"]
+    },
+    {
+      "id": "API-001",
+      "title": "Add versioned world command and query endpoints",
+      "objective": "Expose world creation, inspect, pause, step and fast-forward through typed /api/v1 endpoints with validation and stable error codes.",
+      "acceptance": ["HTTP contract tests cover success and validation failures", "Commands are idempotent where required", "No internal error details or secrets leak in responses"]
+    },
+    {
+      "id": "WEB-001",
+      "title": "Build world creation and observation flows",
+      "objective": "Implement a responsive Leptos interface for scenario creation, world inspection, event history and pause/step/fast-forward controls using the typed API.",
+      "acceptance": ["All controls call real API behavior", "Loading, empty, unavailable and error states are distinct", "Keyboard and narrow-screen use are verified"]
+    }
+  ]
+}

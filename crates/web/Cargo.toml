@@ -1,0 +1,20 @@
+[package]
+name = "sherlock-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "sherlock-web"
+path = "src/main.rs"
+
+[dependencies]
+leptos.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+wasm-bindgen = "0.2"

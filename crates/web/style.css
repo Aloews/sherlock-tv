@@ -1,0 +1,30 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #10151d;
+  color: #eef2f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 75% 0%, #243548 0, #10151d 42rem); }
+a { color: inherit; text-decoration: none; }
+.app-shell { max-width: 1240px; margin: 0 auto; padding: 28px clamp(20px, 5vw, 64px) 36px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid #ffffff20; }
+.brand { font-size: 15px; font-weight: 800; letter-spacing: .22em; }
+.product-label, .eyebrow, footer { color: #91a1b3; font-size: 10px; letter-spacing: .2em; }
+.world-overview { padding: clamp(52px, 9vw, 112px) 0 64px; }
+.eyebrow { color: #a7c7d7; }
+h1 { max-width: 780px; margin: 18px 0; font-size: clamp(42px, 7vw, 76px); line-height: 1.02; letter-spacing: -.055em; font-weight: 650; }
+.lead { max-width: 680px; color: #b7c3ce; font-size: clamp(16px, 2vw, 20px); line-height: 1.65; }
+.world-status { display: flex; gap: 16px; max-width: 660px; margin: 38px 0 54px; padding: 20px 22px; border: 1px solid #ffffff20; border-radius: 14px; background: #ffffff08; }
+.status-indicator { flex: 0 0 9px; width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: #d7ae6b; box-shadow: 0 0 16px #d7ae6b55; }
+.world-status strong { font-size: 15px; }
+.world-status p, .system-grid p { margin: 7px 0 0; color: #91a1b3; line-height: 1.55; font-size: 13px; }
+.system-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.system-grid article { min-height: 150px; padding: 22px; border: 1px solid #ffffff18; border-radius: 12px; background: linear-gradient(145deg, #ffffff0c, #ffffff03); }
+.system-grid article span { color: #91a1b3; font-size: 10px; letter-spacing: .16em; }
+.system-grid h2 { margin: 22px 0 0; font-size: 18px; font-weight: 600; }
+footer { padding-top: 20px; border-top: 1px solid #ffffff20; }
+@media (max-width: 760px) { .system-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .product-label { font-size: 8px; } }
+@media (max-width: 480px) { .system-grid { grid-template-columns: 1fr; } .app-shell { padding-top: 20px; } }
