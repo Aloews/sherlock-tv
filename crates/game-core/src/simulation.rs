@@ -423,7 +423,7 @@ mod tests {
     #[test]
     fn starter_world_contains_two_populated_settlements() {
         let world = WorldState::starter(42);
-        assert_eq!(world.entities.len(), 2);
+        assert_eq!(world.entities.len(), 6);
         assert_eq!(
             world
                 .entities
@@ -433,6 +433,7 @@ mod tests {
             2
         );
         assert_eq!(world.entities[&EntityId(1)].attributes["population"], 120);
+        assert_eq!(world.resource_sites.len(), 4);
     }
 
     #[test]
@@ -449,7 +450,7 @@ mod tests {
                 .any(|event| matches!(event.payload, EventPayload::ResourceStockChanged { .. }))
         );
         assert_eq!(left.entities[&EntityId(1)].attributes["food"], 910);
-        assert_eq!(left.entities[&EntityId(1)].attributes["timber"], 518);
+        assert_eq!(left.entities[&EntityId(1)].attributes["timber"], 500);
     }
 
     #[test]
