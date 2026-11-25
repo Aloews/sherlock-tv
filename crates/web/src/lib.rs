@@ -35,6 +35,7 @@ struct MapCellView {
     elevation_meters: u16,
     soil_fertility: u8,
     water_access: bool,
+    settlements: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -50,6 +51,8 @@ struct EventView {
 struct SettlementView {
     id: u64,
     name: String,
+    x: u16,
+    y: u16,
     population: u64,
     food: u64,
     timber: u64,
@@ -162,24 +165,30 @@ fn WorldDashboard() -> impl IntoView {
                             <div class="world-map">
                                 {current.map.cells.into_iter().map(|cell| {
                                     let class_name = format!("map-cell terrain-{}", cell.terrain);
+                                    let marker = if cell.settlements.is_empty() {
+                                        match cell.terrain.as_str() {
+                                            "river" => "Р",
+                                            "forest" => "Л",
+                                            "hills" => "Х",
+                                            "mountain" => "Г",
+                                            _ => "П",
+                                        }
+                                    } else {
+                                        "⌂"
+                                    };
                                     let title = format!(
-                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {}",
+                                        "Координаты: {}, {} · климат: {} · высота: {} м · плодородие: {} · вода: {} · поселения: {}",
                                         cell.x,
                                         cell.y,
                                         cell.climate,
                                         cell.elevation_meters,
                                         cell.soil_fertility,
-                                        if cell.water_access { "есть" } else { "нет" }
+                                        if cell.water_access { "есть" } else { "нет" },
+                                        cell.settlements.join(", ")
                                     );
                                     view! {
                                         <div class=class_name title=title>
-                                            <span>{match cell.terrain.as_str() {
-                                                "river" => "Р",
-                                                "forest" => "Л",
-                                                "hills" => "Х",
-                                                "mountain" => "Г",
-                                                _ => "П",
-                                            }}</span>
+                                            <span>{marker}</span>
                                         </div>
                                     }
                                 }).collect_view()}
@@ -193,6 +202,7 @@ fn WorldDashboard() -> impl IntoView {
                                 <article class="settlement-card">
                                     <p class="eyebrow">{format!("ПОСЕЛЕНИЕ #{}", settlement.id)}</p>
                                     <h3>{settlement.name}</h3>
+                                    <div class="settlement-stat"><span>"Координаты"</span><strong>{format!("{}, {}", settlement.x, settlement.y)}</strong></div>
                                     <div class="settlement-stat"><span>"Население"</span><strong>{settlement.population}</strong></div>
                                     <div class="settlement-stat"><span>"Запасы пищи"</span><strong>{settlement.food}</strong></div>
                                     <div class="settlement-stat"><span>"Древесина"</span><strong>{settlement.timber}</strong></div>
