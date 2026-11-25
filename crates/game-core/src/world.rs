@@ -1,3 +1,4 @@
+use crate::geography::WorldMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -131,6 +132,7 @@ pub struct WorldState {
     pub next_entity_id: u64,
     pub next_event_sequence: u64,
     pub event_log: Vec<EventEnvelope>,
+    pub geography: WorldMap,
     pub entities: BTreeMap<EntityId, EntityRecord>,
 }
 
@@ -153,6 +155,7 @@ impl WorldState {
             next_entity_id: 1,
             next_event_sequence: 0,
             event_log: Vec::new(),
+            geography: WorldMap::starter(seed),
             entities: BTreeMap::new(),
         }
     }
