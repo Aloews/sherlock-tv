@@ -36,7 +36,9 @@
         "Units and coordinate conventions are explicit",
         "Adjacency and region invariants have tests",
         "Serialization round-trips preserve domain state"
-      ]
+      ],
+      "status": "in_progress",
+      "progress": "Typed grid, starter terrain/climate, river access, regions, adjacency and serialization tests implemented; hydrology and resource-site placement remain."
     },
     {
       "id": "WORLD-002",
