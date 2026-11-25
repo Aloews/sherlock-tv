@@ -226,20 +226,10 @@ impl WorldState {
                         15,
                         "Лесные угодья",
                     )),
-                    TerrainKind::Hills => Some((
-                        ResourceKind::Stone,
-                        700,
-                        700,
-                        0,
-                        "Каменоломня",
-                    )),
-                    TerrainKind::Mountain => Some((
-                        ResourceKind::Iron,
-                        450,
-                        450,
-                        0,
-                        "Рудное месторождение",
-                    )),
+                    TerrainKind::Hills => Some((ResourceKind::Stone, 700, 700, 0, "Каменоломня")),
+                    TerrainKind::Mountain => {
+                        Some((ResourceKind::Iron, 450, 450, 0, "Рудное месторождение"))
+                    }
                     TerrainKind::Plains if cell.soil_fertility >= 75 => Some((
                         ResourceKind::WildFood,
                         120 + u64::from(cell.soil_fertility),

@@ -86,9 +86,7 @@ impl SimulationSystem for EcologySystem {
                 .map_err(|error| SystemError::new(error.to_string()))?;
 
             let available_capacity = site.capacity_units - site.stock_units;
-            let regenerated = site
-                .regeneration_units_per_tick
-                .min(available_capacity);
+            let regenerated = site.regeneration_units_per_tick.min(available_capacity);
             if regenerated == 0 {
                 continue;
             }
@@ -193,8 +191,14 @@ mod tests {
         assert!(first.resource_sites.values().all(|site| {
             site.validate().is_ok() && first.geography.cell_at(site.location).is_some()
         }));
-        assert!(first.entities.values().filter(|entity| entity.kind == EntityKind::ResourceSite).count()
-            == first.resource_sites.len());
+        assert!(
+            first
+                .entities
+                .values()
+                .filter(|entity| entity.kind == EntityKind::ResourceSite)
+                .count()
+                == first.resource_sites.len()
+        );
         assert!(WorldMap::starter(42).validate().is_ok());
     }
 }

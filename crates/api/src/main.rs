@@ -6,7 +6,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sherlock_game_core::{
-    EntityKind, EventEnvelope, EventPayload, ResourceKind, SimulationEngine, TerrainKind, WorldId, WorldState,
+    EntityKind, EventEnvelope, EventPayload, ResourceKind, SimulationEngine, TerrainKind, WorldId,
+    WorldState,
 };
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, net::SocketAddr};
@@ -591,7 +592,12 @@ mod tests {
         );
         assert_eq!(created.event_count, 1);
         assert!(!created.resource_sites.is_empty());
-        assert!(created.resource_sites.iter().all(|site| site.stock_units <= site.capacity_units));
+        assert!(
+            created
+                .resource_sites
+                .iter()
+                .all(|site| site.stock_units <= site.capacity_units)
+        );
         assert_eq!(created.map.width, 8);
         assert_eq!(created.map.height, 6);
         assert_eq!(created.map.cells.len(), 48);
@@ -629,9 +635,13 @@ mod tests {
         assert_eq!(response.world.settlements[0].food, 910);
         assert_eq!(response.world.settlements[0].timber, 518);
         assert_eq!(response.world.event_count, 1 + response.emitted_events);
-        assert!(response.world.resource_sites.iter().any(|site| {
-            site.regeneration_units_per_tick > 0 && site.stock_units > 0
-        }));
+        assert!(
+            response
+                .world
+                .resource_sites
+                .iter()
+                .any(|site| { site.regeneration_units_per_tick > 0 && site.stock_units > 0 })
+        );
         let loaded = get_world(Path(created.world_id), State(state))
             .await
             .expect("load persisted world")
