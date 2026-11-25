@@ -132,6 +132,7 @@ pub struct WorldState {
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_event_sequence: u64,
+    #[serde(skip)]
     pub event_log: Vec<EventEnvelope>,
     pub geography: WorldMap,
     pub entities: BTreeMap<EntityId, EntityRecord>,
