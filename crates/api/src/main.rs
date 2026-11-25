@@ -361,7 +361,7 @@ async fn advance_tick(
     .ok_or(StatusCode::NOT_FOUND)?;
     let mut world: WorldState =
         serde_json::from_value(snapshot).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    world.event_log = load_events(&mut **transaction, database_id).await?;
+    world.event_log = load_events(&mut *transaction, database_id).await?;
     let previous_event_count = world.event_log.len();
     let events = SimulationEngine::civilization()
         .advance_tick(&mut world)
@@ -584,7 +584,7 @@ mod tests {
         let after = load_world(&state.pool, database_id)
             .await
             .expect("load world after rejected tick");
-        assert_eq!(after.tick, Tick(u64::MAX));
+        assert_eq!(after.tick, sherlock_game_core::Tick(u64::MAX));
         assert_eq!(after.event_log.len(), created.event_count);
     }
 }
