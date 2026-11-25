@@ -445,6 +445,18 @@ mod tests {
     }
 
     #[test]
+    fn world_snapshot_round_trip_preserves_geography_and_event_history() {
+        let engine = SimulationEngine::civilization();
+        let mut world = WorldState::starter(314);
+        engine.advance_tick(&mut world).expect("tick");
+        let encoded = serde_json::to_string(&world).expect("serialize world");
+        let decoded: WorldState = serde_json::from_str(&encoded).expect("deserialize world");
+        assert_eq!(decoded, world);
+        assert!(decoded.geography.validate().is_ok());
+        assert_eq!(decoded.event_log.len(), decoded.next_event_sequence as usize);
+    }
+
+    #[test]
     fn tick_overflow_is_rejected_without_mutation() {
         let engine = SimulationEngine::new(vec![]);
         let mut world = WorldState::new(1, 1);
