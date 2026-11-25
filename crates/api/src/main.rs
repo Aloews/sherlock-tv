@@ -246,12 +246,13 @@ mod tests {
     #[tokio::test]
     async fn tick_advances_economy_and_appends_causal_events() {
         let state = state();
-        create_world(
+        let created = create_world(
             State(state.clone()),
             Json(CreateWorldRequest { seed: Some(42) }),
         )
         .await
         .expect("world creation");
+        assert_eq!(created.0.tick, 0);
         let response = advance_tick(State(state.clone())).await.expect("tick").0;
         assert_eq!(response.world.tick, 1);
         assert!(response.emitted_events >= 5);
@@ -286,12 +287,13 @@ mod tests {
     #[tokio::test]
     async fn tick_overflow_returns_conflict_without_mutating_world() {
         let state = state();
-        create_world(
+        let created = create_world(
             State(state.clone()),
             Json(CreateWorldRequest { seed: Some(42) }),
         )
         .await
         .expect("world creation");
+        assert_eq!(created.0.tick, 0);
         state.world.write().await.as_mut().expect("world").tick =
             sherlock_game_core::Tick(u64::MAX);
         assert_eq!(
