@@ -64,6 +64,7 @@ fn WorldDashboard() -> impl IntoView {
     let (world, set_world) = signal(None::<WorldView>);
     let (status, set_status) = signal("Подключите API и создайте новый мир.".to_string());
     let (api_base, set_api_base) = signal(DEFAULT_API_BASE.trim_end_matches('/').to_string());
+    let (world_id, set_world_id) = signal(String::new());
 
     let create_world = move |_| {
         let base = api_base.get_untracked();
@@ -88,7 +89,8 @@ fn WorldDashboard() -> impl IntoView {
             .await;
             match result {
                 Ok(view) => {
-                    set_status.set("Мир создан. Симуляция готова к первому ходу.".into());
+                    set_status.set(format!("Мир сохранён. ID: {}.", view.world_id));
+                    set_world_id.set(view.world_id.to_string());
                     set_world.set(Some(view));
                 }
                 Err(error) => set_status.set(format!("Не удалось создать мир: {error}")),
@@ -96,12 +98,47 @@ fn WorldDashboard() -> impl IntoView {
         });
     };
 
+    let load_world = move |_| {
+        let base = api_base.get_untracked();
+        let requested_id = world_id.get_untracked();
+        let Ok(id) = requested_id.trim().parse::<u64>() else {
+            set_status.set("Укажите числовой ID мира.".into());
+            return;
+        };
+        set_status.set("Загружаем сохранённый мир…".into());
+        leptos::task::spawn_local(async move {
+            let result = async {
+                let response = gloo_net::http::Request::get(&format!("{base}/api/v1/world/{id}"))
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !response.ok() {
+                    return Err(format!("API вернул HTTP {}", response.status()));
+                }
+                response.json::<WorldView>().await.map_err(|error| error.to_string())
+            }
+            .await;
+            match result {
+                Ok(view) => {
+                    set_status.set(format!("Мир {} загружен из сохранения.", view.world_id));
+                    set_world_id.set(view.world_id.to_string());
+                    set_world.set(Some(view));
+                }
+                Err(error) => set_status.set(format!("Не удалось загрузить мир: {error}")),
+            }
+        });
+    };
+
     let advance_tick = move |_| {
         let base = api_base.get_untracked();
+        let Some(id) = world.get_untracked().map(|current| current.world_id) else {
+            set_status.set("Сначала создайте или загрузите мир.".into());
+            return;
+        };
         set_status.set("Выполняется ход…".into());
         leptos::task::spawn_local(async move {
             let result = async {
-                let response = gloo_net::http::Request::post(&format!("{base}/api/v1/world/tick"))
+                let response = gloo_net::http::Request::post(&format!("{base}/api/v1/world/{id}/tick"))
                     .send()
                     .await
                     .map_err(|error| error.to_string())?;
@@ -137,8 +174,12 @@ fn WorldDashboard() -> impl IntoView {
                 <label for="api-base">"Адрес игрового API"</label>
                 <input id="api-base" type="url" prop:value=move || api_base.get()
                     on:input=move |event| set_api_base.set(event_target_value(&event)) />
+                <label for="world-id">"ID сохранённого мира"</label>
+                <input id="world-id" type="number" min="1" prop:value=move || world_id.get()
+                    on:input=move |event| set_world_id.set(event_target_value(&event)) />
                 <div class="actions">
                     <button class="primary-button" on:click=create_world>"Создать мир"</button>
+                    <button class="secondary-button" on:click=load_world>"Загрузить мир"</button>
                     <button class="secondary-button" on:click=advance_tick disabled=move || world.get().is_none()>"Следующий ход"</button>
                 </div>
                 <p class="status-message" aria-live="polite">{move || status.get()}</p>
